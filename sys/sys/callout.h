@@ -78,9 +78,18 @@ int	callout_schedule_on(struct callout *, int, int);
     callout_schedule_on((c), (on_tick), PCPU_GET(cpuid))
 #define	callout_stop(c)		_callout_stop_safe(c, 0)
 int	_callout_stop_safe(struct callout *, int);
+#ifndef RIFT_TIMER
 void	callout_tick(void);
+#else 
+void	callout_tick(void *);
+#endif
+
 int	callout_tickstofirst(int limit);
 extern void (*callout_new_inserted)(int cpu, int ticks);
+
+#ifdef RIFT_TIMER
+void *alloc_callout(void);
+#endif
 
 #endif
 

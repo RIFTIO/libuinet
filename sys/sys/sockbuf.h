@@ -147,10 +147,16 @@ void	sbflush_locked(struct sockbuf *sb);
 void	sbrelease(struct sockbuf *sb, struct socket *so);
 void	sbrelease_internal(struct sockbuf *sb, struct socket *so);
 void	sbrelease_locked(struct sockbuf *sb, struct socket *so);
+#ifdef RIFT_UINET 
+int	sbreserve(struct sockbuf *sb, u_long cc, struct socket *so);
+int
+sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so);
+#else 
 int	sbreserve(struct sockbuf *sb, u_long cc, struct socket *so,
 	    struct thread *td);
 int	sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 	    struct thread *td);
+#endif
 struct mbuf *
 	sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff);
 void	sbtoxsockbuf(struct sockbuf *sb, struct xsockbuf *xsb);

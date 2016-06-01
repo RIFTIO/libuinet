@@ -54,6 +54,8 @@ void uinet_init_thread0(void);
 
 static struct uinet_thread uinet_thread0;
 uhi_tls_key_t kthread_tls_key;
+uhi_tls_key_t uinet_vnet_key;
+uhi_tls_key_t uinet_thread_callout_key;
 
 struct uinet_thread *
 uinet_thread_alloc(struct proc *p)
@@ -254,6 +256,13 @@ uinet_init_thread0(void)
 	if (uhi_tls_key_create(&kthread_tls_key, tls_destructor))
 		panic("Could not create kthread subsystem tls key");
 
+
+	if (uhi_tls_key_create(&uinet_vnet_key, NULL))
+		panic("Could not create uinet subsystem vnet key");
+
+	if (uhi_tls_key_create(&uinet_thread_callout_key, NULL))
+		panic("Could not create uinet thread callout key");
+
 	td = &thread0;
 	td->td_proc = &proc0;
 
@@ -266,6 +275,7 @@ uinet_init_thread0(void)
 	uinet_thread0.td = td;
 
 	uhi_tls_set(kthread_tls_key, &uinet_thread0);
+  //curthread = td;
 }
 
 

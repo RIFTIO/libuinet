@@ -1526,6 +1526,7 @@ zone_ctor(void *mem, int size, void *udata, int flags)
 		mtx_lock(&uma_mtx);
 		if (uma_cache_table_slots_available == 0) {
 			mtx_unlock(&uma_mtx);
+		  panic("Couldnt find uma cache table slot. table slot size is %d",UMA_CACHE_TABLE_SLOTS);
 			return (ENOMEM);
 		}
 
@@ -2176,6 +2177,13 @@ uma_zdestroy(uma_zone_t zone)
 	zone_free_item(zones, zone, NULL, SKIP_NONE, ZFREE_STATFREE);
 }
 
+#ifdef RIFT_UINET
+struct uma_tls my_tls;
+#else
+ tls = malloc(sizeof(struct uma_tls), M_UMATLS, M_ZERO|M_WAITOK);
+  for (i = 0; i < UMA_CACHE_TABLE_SLOTS; i++)
+    tls->ut_caches[i].uc_cacheid = uhi_thread_self_id();
+#endif
 /* See uma.h */
 void *
 uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)

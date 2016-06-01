@@ -2621,7 +2621,7 @@ sooptcopyin(struct sockopt *sopt, void *buf, size_t len, size_t minlen)
  * XXX: optlen is size_t, not socklen_t
  */
 int
-so_setsockopt(struct socket *so, int level, int optname, const void *optval,
+so_setsockopt(struct socket *so, int level, int optname, void *optval,
     size_t optlen)
 {
 	struct sockopt sopt;
@@ -2842,9 +2842,15 @@ sosetopt(struct socket *so, struct sockopt *sopt)
 			switch (sopt->sopt_name) {
 			case SO_SNDBUF:
 			case SO_RCVBUF:
+#ifdef RIFT_UINET
+				if (sbreserve(sopt->sopt_name == SO_SNDBUF ?
+				    &so->so_snd : &so->so_rcv, (u_long)optval,
+				    so) == 0) {
+#else
 				if (sbreserve(sopt->sopt_name == SO_SNDBUF ?
 				    &so->so_snd : &so->so_rcv, (u_long)optval,
 				    so, curthread) == 0) {
+#endif
 					error = ENOBUFS;
 					goto bad;
 				}
@@ -4021,3 +4027,74 @@ so_unlock(struct socket *so)
 {
 	SOCK_UNLOCK(so);
 }
+
+int
+sockargs(mp, buf, buflen, type)
+	struct mbuf **mp;
+	caddr_t buf;
+	int buflen, type;
+{
+	struct sockaddr *sa;
+	struct mbuf *m;
+	int error;
+
+	if ((u_int)buflen > MLEN) {
+#ifdef COMPAT_OLDSOCK
+		if (type == MT_SONAME && (u_int)buflen <= 112)
+			buflen = MLEN;		/* unix domain compat. hack */
+		else
+#endif
+			if ((u_int)buflen > MCLBYTES)
+				return (EINVAL);
+	}
+	m = m_get(M_WAIT, type);
+	if ((u_int)buflen > MLEN)
+		MCLGET(m, M_WAIT);
+	m->m_len = buflen;
+	error = copyin(buf, mtod(m, caddr_t), (u_int)buflen);
+	if (error)
+		(void) m_free(m);
+	else {
+		*mp = m;
+		if (type == MT_SONAME) {
+			sa = mtod(m, struct sockaddr *);
+
+#if defined(COMPAT_OLDSOCK) && BYTE_ORDER != BIG_ENDIAN
+			if (sa->sa_family == 0 && sa->sa_len < AF_MAX)
+				sa->sa_family = sa->sa_len;
+#endif
+			sa->sa_len = buflen;
+		}
+	}
+	return (error);
+}
+
+int
+getsockaddr(namp, uaddr, len)
+	struct sockaddr **namp;
+	caddr_t uaddr;
+	size_t len;
+{
+	struct sockaddr *sa;
+	int error;
+
+	if (len > SOCK_MAXADDRLEN)
+		return (ENAMETOOLONG);
+	if (len < offsetof(struct sockaddr, sa_data[0]))
+		return (EINVAL);
+	sa = malloc(len, M_SONAME, M_WAITOK);
+	error = copyin(uaddr, sa, len);
+	if (error) {
+		free(sa, M_SONAME);
+	} else {
+#if defined(COMPAT_OLDSOCK) && BYTE_ORDER != BIG_ENDIAN
+		if (sa->sa_family == 0 && sa->sa_len < AF_MAX)
+			sa->sa_family = sa->sa_len;
+#endif
+		sa->sa_len = len;
+		*namp = sa;
+	}
+	return (error);
+}
+
+

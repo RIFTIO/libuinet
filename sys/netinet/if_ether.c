@@ -922,7 +922,8 @@ arp_ifinit2(struct ifnet *ifp, struct ifaddr *ifa, u_char *enaddr)
 static void
 arp_init(void)
 {
-
+#ifndef RIFT_UINET
 	netisr_register(&arp_nh);
+#endif
 }
 SYSINIT(arp, SI_SUB_PROTO_DOMAIN, SI_ORDER_ANY, arp_init, 0);

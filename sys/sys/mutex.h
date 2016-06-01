@@ -347,7 +347,11 @@ extern struct mtx_pool *mtxpool_sleep;
 
 #define	mtx_initialized(m)	lock_initalized(&(m)->lock_object)
 
+#ifdef RIFT_UINET
+#define mtx_owned(m)	(((uint64_t)(m)->mtx_lock & ~MTX_FLAGMASK) == (uintptr_t)curthread)
+#else
 #define mtx_owned(m)	(((m)->mtx_lock & ~MTX_FLAGMASK) == (uintptr_t)curthread)
+#endif
 
 #define mtx_recursed(m)	((m)->mtx_recurse != 0)
 

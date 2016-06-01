@@ -33,9 +33,7 @@
 #include <sys/timetc.h>
 
 
-
 int	ticks;
-
 
 /*
  * The real-time timer, interrupting hz times per second.
@@ -53,7 +51,7 @@ uinet_hardclock(void)
 	 * reproduced below.
 	 */
 
-	callout_tick();
+	callout_tick(NULL);
 	tc_ticktock(1);
 
 	/* cpu_tick_calibration();
@@ -85,7 +83,6 @@ uinet_hardclock(void)
 #endif /* SW_WATCHDOG */
 #endif /* UINET */
 }
-
 
 /*
  * Compute number of ticks in the specified amount of time.

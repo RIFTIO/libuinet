@@ -90,3 +90,16 @@ uinet_if_xmit
 uinet_lock_log_set_file
 uinet_lock_log_enable
 uinet_lock_log_disable
+uinet_set_transmit_cback
+uinet_sogetprotocol
+uinet_packet_receive_handler
+uinet_callout_tick
+uinet_sosendmsg
+uinet_soreceivemsg
+uinet_set_callout_cback
+uinet_alloc_callout
+uinet_alloc_curthread
+uinet_set_curthread_cback
+uinet_set_callout_context
+uinet_packet_send_handler
+uinet_sononblocking

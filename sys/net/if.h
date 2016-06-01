@@ -57,7 +57,7 @@ struct ifnet;
  * Length of interface external name, including terminating '\0'.
  * Note: this is the same size as a generic device's external name.
  */
-#define		IF_NAMESIZE	16
+#define		IF_NAMESIZE	64  
 #if __BSD_VISIBLE
 #define		IFNAMSIZ	IF_NAMESIZE
 #define		IF_MAXUNIT	0x7fff	/* historical value */

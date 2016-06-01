@@ -34,6 +34,8 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
+// #ifndef __GI_SCANNER__
+
 /* XXX: These includes suck. Sorry! */
 #include <sys/queue.h>
 #ifdef _KERNEL
@@ -1101,5 +1103,5 @@ m_tag_find(struct mbuf *m, int type, struct m_tag *start)
  #define M_PROFILE(m)
 #endif
 
-
+// #endif //__GI_SCANNER__
 #endif /* !_SYS_MBUF_H_ */

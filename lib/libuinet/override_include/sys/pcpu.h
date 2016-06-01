@@ -174,9 +174,21 @@ struct pcpu *uinet_pcpu_get(void);
 #include <sys/proc.h>
 
 extern uhi_tls_key_t kthread_tls_key;
+extern uhi_tls_key_t uinet_vnet_key;
+extern uhi_tls_key_t uinet_thread_callout_key;
 
 #undef curthread
+#ifndef RIFT_UINET
 #define curthread (((struct uinet_thread *)uhi_tls_get(kthread_tls_key))->td)
+#else
+#if 0
+extern void *(*uinet_get_curthread_cback)(void);
+#define curthread (((*uinet_get_curthread_cback))? \
+                   (((*uinet_get_curthread_cback)())?(((struct uinet_thread *)((*uinet_get_curthread_cback)()))->td):&thread0):&thread0)
+#endif
+#define curthread (&thread0)
+//#define curthread PCPU_GET(curthread)
+#endif
 
 
 #endif	/* _UINET_SYS_PCPU_H_ */

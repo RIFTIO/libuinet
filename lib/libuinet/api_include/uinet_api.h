@@ -32,6 +32,13 @@ extern "C" {
 #endif
 
 
+#ifndef __USE_BSD
+#define __USE_BSD 1
+#endif
+#ifdef _SYS_TYPES_H
+#undef _SYS_TYPES_H
+#endif
+#include <sys/types.h>
 #include "uinet_api_errno.h"
 #include "uinet_api_types.h"
 #include "uinet_queue.h"
@@ -75,7 +82,7 @@ void  uinet_pool_destroy(uinet_pool_t pool);
 int   uinet_pool_set_max(uinet_pool_t pool, int nitems);
 int   uinet_pool_get_max(uinet_pool_t pool);
 int   uinet_pool_get_cur(uinet_pool_t pool);
-int   uinet_setl2info(struct uinet_socket *so, const struct uinet_in_l2info *l2i);
+int   uinet_setl2info(struct uinet_socket *so, struct uinet_in_l2info *l2i);
 int   uinet_setl2info2(struct uinet_socket *so, const uint8_t *local_addr, const uint8_t *foreign_addr,
 		       uint16_t flags, const struct uinet_in_l2tagstack *tagstack);
 void  uinet_shutdown(unsigned int signo);
@@ -96,6 +103,7 @@ int   uinet_solisten(struct uinet_socket *so, int backlog);
 int   uinet_soreadable(struct uinet_socket *so, unsigned int in_upcall);
 int   uinet_sowritable(struct uinet_socket *so, unsigned int in_upcall);
 int   uinet_soreceive(struct uinet_socket *so, struct uinet_sockaddr **psa, struct uinet_uio *uio, int *flagsp);
+int uinet_soreceivemsg(struct uinet_socket *so, struct uinet_msghdr *msg,int *flagsp,ssize_t *rcvd_len);
 void  uinet_sosetnonblocking(struct uinet_socket *so, unsigned int nonblocking);
 int   uinet_sosetsockopt(struct uinet_socket *so, int level, int optname, void *optval, unsigned int optlen);
 void  uinet_sosetupcallprep(struct uinet_socket *so,
@@ -104,6 +112,7 @@ void  uinet_sosetupcallprep(struct uinet_socket *so,
 			    void (*soup_send)(struct uinet_socket *, void *, int64_t), void *soup_send_arg);
 void  uinet_sosetuserctx(struct uinet_socket *so, int key, void *ctx);
 int   uinet_sosend(struct uinet_socket *so, struct uinet_sockaddr *addr, struct uinet_uio *uio, int flags);
+int uinet_sosendmsg(struct uinet_socket *so, struct uinet_msghdr *mp,int flags,ssize_t *len);
 int   uinet_soshutdown(struct uinet_socket *so, int how);
 int   uinet_sogetpeeraddr(struct uinet_socket *so, struct uinet_sockaddr **sa);
 int   uinet_sogetsockaddr(struct uinet_socket *so, struct uinet_sockaddr **sa);
@@ -138,6 +147,22 @@ int uinet_lock_log_set_file(const char *file);
 int uinet_lock_log_enable(void);
 int uinet_lock_log_disable(void);
 
+void uinet_packet_receive_handler(struct uinet_instance *uinst,uint8_t *buf, unsigned int size);
+void   uinet_set_transmit_cback(void (*transmit_cback)(void *userdata,uint8_t *pkt, uint32_t len));
+uint16_t uinet_sogetprotocol(struct uinet_socket *so);
+
+int
+uinet_packet_send_handler(struct uinet_socket *so, uint8_t *buf, unsigned int size,struct uinet_sockaddr *uso_addr, int flags);
+
+void uinet_set_callout_context(void *callout);
+void uinet_callout_tick(void *);
+
+void *uinet_alloc_callout(void);
+void uinet_set_callout_cback(void *(*callout_cback)(void));
+void *uinet_alloc_curthread(void);
+void uinet_set_curthread_cback(void *(*curthread_cback)(void));
+
+int uinet_sononblocking(struct uinet_socket *so);
 /*
  *  Create a network interface with the given name, of the given type, in
  *  the given connection domain, and bound to the given cpu.

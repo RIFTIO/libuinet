@@ -142,12 +142,14 @@ SYSCTL_VNET_INT(_net_inet_ip, OID_AUTO, check_interface, CTLFLAG_RW,
 
 VNET_DEFINE(struct pfil_head, inet_pfil_hook);	/* Packet filter hooks */
 
+//#ifndef RIFT_UINET
 static struct netisr_handler ip_nh = {
 	.nh_name = "ip",
 	.nh_handler = ip_input,
 	.nh_proto = NETISR_IP,
 	.nh_policy = NETISR_POLICY_FLOW,
 };
+//#endif
 
 extern	struct domain inetdomain;
 extern	struct protosw inetsw[];
@@ -352,7 +354,9 @@ ip_init(void)
 
 	/* Initialize various other remaining things. */
 	IPQ_LOCK_INIT();
+#ifndef RIFT_UINET
 	netisr_register(&ip_nh);
+#endif
 }
 
 #ifdef VIMAGE

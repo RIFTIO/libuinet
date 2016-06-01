@@ -291,6 +291,7 @@ link_elf_link_common_finish(linker_file_t lf)
 	return (0);
 }
 
+#ifndef RIFT_UINET
 static void
 link_elf_init(void* arg)
 {
@@ -351,6 +352,15 @@ link_elf_init(void* arg)
 
 SYSINIT(link_elf, SI_SUB_KLD, SI_ORDER_THIRD, link_elf_init, 0);
 
+#endif
+
+#ifdef RIFT_UINET
+static int
+link_elf_preload_parse_symbols(elf_file_t ef) 
+{
+  return 0;
+}
+#else
 static int
 link_elf_preload_parse_symbols(elf_file_t ef)
 {
@@ -403,7 +413,7 @@ link_elf_preload_parse_symbols(elf_file_t ef)
 
 	return (0);
 }
-
+#endif
 static int
 parse_dynamic(elf_file_t ef)
 {

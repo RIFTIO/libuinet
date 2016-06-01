@@ -365,6 +365,7 @@ linker_file_register_modules(linker_file_t lf)
 	return (first_error);
 }
 
+#ifndef RIFT_UINET
 static void
 linker_init_kernel_modules(void)
 {
@@ -374,7 +375,7 @@ linker_init_kernel_modules(void)
 
 SYSINIT(linker_kernel, SI_SUB_KLD, SI_ORDER_ANY, linker_init_kernel_modules,
     0);
-
+#endif
 static int
 linker_load_file(const char *filename, linker_file_t *result)
 {
@@ -1449,6 +1450,7 @@ linker_addmodules(linker_file_t lf, struct mod_metadata **start,
 	}
 }
 
+#ifndef RIFT_UINET
 static void
 linker_preload(void *arg)
 {
@@ -1659,6 +1661,7 @@ fail:
 }
 
 SYSINIT(preload, SI_SUB_KLD, SI_ORDER_MIDDLE, linker_preload, 0);
+#endif
 
 /*
  * Search for a not-loaded module by name.

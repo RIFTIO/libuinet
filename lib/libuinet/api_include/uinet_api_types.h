@@ -32,6 +32,7 @@
 struct uinet_socket;
 struct uinet_mbuf;
 struct uinet_in_l2info;
+struct uinet_msghdr;
 
 typedef void * uinet_api_synfilter_cookie_t;
 
@@ -495,6 +496,94 @@ typedef void (*uinet_pool_fini)(void *mem, int size);
 #define	UINET_POOL_ALLOC_WAITOK	0x0002		/* ok to block */
 #define	UINET_POOL_ALLOC_ZERO	0x0100		/* bzero the allocation */
 
+
+/* UINET_SCTP user socket options */
+/*
+ * user socket options: socket API defined
+ */
+/*
+ * read-write options
+ */
+#define UINET_SCTP_RTOINFO			0x00000001
+#define UINET_SCTP_ASSOCINFO			0x00000002
+#define UINET_SCTP_INITMSG			0x00000003
+#define UINET_SCTP_NODELAY			0x00000004
+#define UINET_SCTP_AUTOCLOSE			0x00000005
+#define UINET_SCTP_SET_PEER_PRIMARY_ADDR	0x00000006
+#define UINET_SCTP_PRIMARY_ADDR		0x00000007
+#define UINET_SCTP_ADAPTATION_LAYER		0x00000008
+/* same as above */
+#define UINET_SCTP_ADAPTION_LAYER		0x00000008
+#define UINET_SCTP_DISABLE_FRAGMENTS		0x00000009
+#define UINET_SCTP_PEER_ADDR_PARAMS 		0x0000000a
+#define UINET_SCTP_DEFAULT_SEND_PARAM		0x0000000b
+/* ancillary data/notification interest options */
+#define UINET_SCTP_EVENTS			0x0000000c	/* deprecated */
+/* Without this applied we will give V4 and V6 addresses on a V6 socket */
+#define UINET_SCTP_I_WANT_MAPPED_V4_ADDR	0x0000000d
+#define UINET_SCTP_MAXSEG 			0x0000000e
+#define UINET_SCTP_DELAYED_SACK               0x0000000f
+#define UINET_SCTP_FRAGMENT_INTERLEAVE        0x00000010
+#define UINET_SCTP_PARTIAL_DELIVERY_POINT     0x00000011
+/* authentication support */
+#define UINET_SCTP_AUTH_CHUNK 		0x00000012
+#define UINET_SCTP_AUTH_KEY 			0x00000013
+#define UINET_SCTP_HMAC_IDENT 		0x00000014
+#define UINET_SCTP_AUTH_ACTIVE_KEY 		0x00000015
+#define UINET_SCTP_AUTH_DELETE_KEY 		0x00000016
+#define UINET_SCTP_USE_EXT_RCVINFO		0x00000017
+#define UINET_SCTP_AUTO_ASCONF		0x00000018	/* rw */
+#define UINET_SCTP_MAXBURST			0x00000019	/* rw */
+#define UINET_SCTP_MAX_BURST			0x00000019	/* rw */
+/* assoc level context */
+#define UINET_SCTP_CONTEXT                    0x0000001a	/* rw */
+/* explicit EOR signalling */
+#define UINET_SCTP_EXPLICIT_EOR               0x0000001b
+#define UINET_SCTP_REUSE_PORT                 0x0000001c	/* rw */
+#define UINET_SCTP_AUTH_DEACTIVATE_KEY	0x0000001d
+#define UINET_SCTP_EVENT                      0x0000001e
+#define UINET_SCTP_RECVRCVINFO                0x0000001f
+#define UINET_SCTP_RECVNXTINFO                0x00000020
+#define UINET_SCTP_DEFAULT_SNDINFO            0x00000021
+#define UINET_SCTP_DEFAULT_PRINFO             0x00000022
+#define UINET_SCTP_PEER_ADDR_THLDS            0x00000023
+#define UINET_SCTP_REMOTE_UDP_ENCAPS_PORT     0x00000024
+
+/*
+ * read-only options
+ */
+#define UINET_SCTP_STATUS			0x00000100
+#define UINET_SCTP_GET_PEER_ADDR_INFO		0x00000101
+/* authentication support */
+#define UINET_SCTP_PEER_AUTH_CHUNKS 		0x00000102
+#define UINET_SCTP_LOCAL_AUTH_CHUNKS 		0x00000103
+#define UINET_SCTP_GET_ASSOC_NUMBER           0x00000104	/* ro */
+#define UINET_SCTP_GET_ASSOC_ID_LIST          0x00000105	/* ro */
+#define UINET_SCTP_TIMEOUTS                   0x00000106
+
+/*  SCTP Internal get/set sockopt */
+#define UINET_SCTP_BINDX_ADD_ADDR		0x00008001
+#define UINET_SCTP_BINDX_REM_ADDR		0x00008002
+/* Hidden socket option that gets the addresses */
+#define UINET_SCTP_GET_PEER_ADDRESSES		0x00008003
+#define UINET_SCTP_GET_LOCAL_ADDRESSES	0x00008004
+/* return the total count in bytes needed to hold all local addresses bound */
+#define UINET_SCTP_GET_LOCAL_ADDR_SIZE	0x00008005
+/* Return the total count in bytes needed to hold the remote address */
+#define UINET_SCTP_GET_REMOTE_ADDR_SIZE	0x00008006
+/* hidden option for connectx */
+#define UINET_SCTP_CONNECT_X			0x00008007
+/* hidden option for connectx_delayed, part of sendx */
+#define UINET_SCTP_CONNECT_X_DELAYED		0x00008008
+#define UINET_SCTP_CONNECT_X_COMPLETE         0x00008009
+/* hidden socket option based sctp_peeloff */
+#define UINET_SCTP_PEELOFF                    0x0000800a
+/* the real worker for sctp_getaddrlen() */
+#define UINET_SCTP_GET_ADDR_LEN               0x0000800b
+/* Debug things that need to be purged */
+#define UINET_SCTP_SET_INITIAL_DBG_SEQ	0x00009f00
+
+
 struct uinet_instance;
 typedef struct uinet_instance *uinet_instance_t;
 
@@ -512,7 +601,9 @@ typedef enum {
 	UINET_IFTYPE_NETMAP,
 	UINET_IFTYPE_PCAP,
 	UINET_IFTYPE_BRIDGE,
-	UINET_IFTYPE_SPAN
+	UINET_IFTYPE_SPAN,
+	UINET_IFTYPE_RAW,
+	UINET_IFTYPE_FPATH
 } uinet_iftype_t;
 
 

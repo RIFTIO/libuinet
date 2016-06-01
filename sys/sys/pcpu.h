@@ -51,10 +51,12 @@
 /*
  * Define a set for pcpu data.
  */
+#ifndef RIFT_UINET
 extern uintptr_t *__start_set_pcpu;
 __GLOBL(__start_set_pcpu);
 extern uintptr_t *__stop_set_pcpu;
 __GLOBL(__stop_set_pcpu);
+#endif
 
 /*
  * Array of dynamic pcpu base offsets.  Indexed by id.
@@ -64,12 +66,22 @@ extern uintptr_t dpcpu_off[];
 /*
  * Convenience defines.
  */
+#ifndef RIFT_UINET
 #define	DPCPU_START		((uintptr_t)&__start_set_pcpu)
 #define	DPCPU_STOP		((uintptr_t)&__stop_set_pcpu)
 #define	DPCPU_BYTES		(DPCPU_STOP - DPCPU_START)
 #define	DPCPU_MODMIN		2048
 #define	DPCPU_SIZE		roundup2(DPCPU_BYTES, PAGE_SIZE)
+#endif
+
+#ifdef RIFT_UINET
+#define	DPCPU_START		((uintptr_t)dpcpu_init_area)
+#define	DPCPU_STOP		((uintptr_t)dpcpu_init_area + dpcpu_total_size)
+#define	DPCPU_BYTES		(DPCPU_STOP - DPCPU_START)
+#define	DPCPU_MODMIN		2048
+#define	DPCPU_SIZE		roundup2(DPCPU_BYTES, PAGE_SIZE)
 #define	DPCPU_MODSIZE		(DPCPU_SIZE - (DPCPU_BYTES - DPCPU_MODMIN))
+#endif
 
 /*
  * Declaration and definition.

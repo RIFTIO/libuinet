@@ -51,7 +51,13 @@
 #include "uinet_host_interface.h"
 
 #include "opt_inet6.h"
+#include <netinet/ip.h>
+#include <sys/callout.h>
 
+void (*uinet_transmit_cback)(void *userdata,uint8_t *pkt, uint32_t len);
+void *(*uinet_get_callout_cback)(void);
+void *(*uinet_get_curthread_cback)(void);
+extern char uinet_init_completed;
 
 int
 uinet_inet6_enabled(void)
@@ -465,7 +471,7 @@ uinet_getl2info(struct uinet_socket *so, struct uinet_in_l2info *l2i)
 
 
 int
-uinet_setl2info(struct uinet_socket *so, const struct uinet_in_l2info *l2i)
+uinet_setl2info(struct uinet_socket *so, struct uinet_in_l2info *l2i)
 {
 	struct socket *so_internal = (struct socket *)so;
 	int error = 0;
@@ -836,7 +842,7 @@ uinet_sowritable(struct uinet_socket *so, unsigned int in_upcall)
 		    so_internal->so_error ||
 		    (so_internal->so_state & SS_ISDISCONNECTED)) {
 			canwrite = -1;
-		} else if ((so_internal->so_state & SS_ISCONNECTED) == 0) {
+		} else if (((so_internal->so_state & SS_ISCONNECTED) == 0) && (so_internal->so_proto->pr_flags & PR_CONNREQUIRED)) {
 			canwrite = 0;
 		} else {
 			space = sbspace(&so_internal->so_snd);
@@ -887,6 +893,116 @@ uinet_sosetuserctx(struct uinet_socket *so, int key, void *ctx)
 		so_internal->so_user_ctx[key] = ctx;
 }
 
+int
+uinet_soreceivemsg(struct uinet_socket *so, struct uinet_msghdr *msg,int *flagsp,ssize_t *rcvd_len)
+{
+	struct sockaddr *fromsa = 0;
+	struct mbuf *m, *control = 0;
+	struct uio uio;
+	//struct iovec *iov;
+  int i;
+	caddr_t ctlbuf;
+  ssize_t len;
+  int error =0;
+  int max_read;
+  struct msghdr *mp = (struct msghdr *)msg;
+	struct iovec iov[mp->msg_iovlen];
+  KASSERT(rcvd_len,"rcvd len is NULL for receivemsg");
+
+  if(rcvd_len == NULL) {
+    return (EINVAL);
+  }
+
+	uio.uio_resid = 0;
+	for (i = 0; i < mp->msg_iovlen; i++) {
+		iov[i].iov_base = mp->msg_iov[i].iov_base;
+		iov[i].iov_len = mp->msg_iov[i].iov_len;
+    uio.uio_resid += mp->msg_iov[i].iov_len;
+	}
+
+	uio.uio_iov =iov;
+	//uio.uio_iov = mp->msg_iov;
+	uio.uio_iovcnt = mp->msg_iovlen;
+	uio.uio_segflg = UIO_SYSSPACE;
+	uio.uio_rw = UIO_READ;
+	uio.uio_td = curthread;
+	uio.uio_offset = 0;			
+
+  max_read = uinet_soreadable((struct uinet_socket *)so, 0);
+  uio.uio_resid = (max_read < uio.uio_resid)? max_read:uio.uio_resid;
+
+	*rcvd_len = uio.uio_resid;
+	error = soreceive((struct socket *)so, &fromsa, &uio, (struct mbuf **)0,
+	    (mp->msg_control) ? &control : (struct mbuf **)0,
+	    flagsp);
+	if (error) {
+		if (uio.uio_resid != *rcvd_len && (error == ERESTART ||
+		    error == EINTR || error == EWOULDBLOCK))
+			error = 0;
+	}
+
+	if (error)
+		goto out;
+
+	*rcvd_len = *rcvd_len - uio.uio_resid;
+
+	if (mp->msg_name) {
+		len = mp->msg_namelen;
+		if (len <= 0 || fromsa == 0) {
+			len = 0;
+    }
+		else {
+			/* save sa_len before it is destroyed by MSG_COMPAT */
+			len = MIN(len, fromsa->sa_len);
+//#ifdef COMPAT_OLDSOCK
+			//if (mp->msg_flags & MSG_COMPAT)
+				((struct osockaddr *)fromsa)->sa_family = fromsa->sa_family;
+//#endif
+				bcopy(fromsa, mp->msg_name, len);
+		}
+		mp->msg_namelen = len;
+  }
+
+  if(flagsp) {
+    mp->msg_flags |= *flagsp;
+  }
+
+	if (mp->msg_control) {
+		len = mp->msg_controllen;
+		m = control;
+		mp->msg_controllen = 0;
+		ctlbuf = mp->msg_control;
+
+		while (m && len > 0) {
+			unsigned int tocopy;
+
+			if (len >= m->m_len)
+				tocopy = m->m_len;
+			else {
+				mp->msg_flags |= MSG_CTRUNC;
+				tocopy = len;
+			}
+
+			if ((error = copyout(mtod(m, caddr_t),
+					ctlbuf, tocopy)) != 0)
+				goto out;
+
+			ctlbuf += tocopy;
+			len -= tocopy;
+			m = m->m_next;
+		}
+		mp->msg_controllen = ctlbuf - (caddr_t)mp->msg_control;
+	}
+
+out:
+	if (fromsa)
+		free(fromsa, M_SONAME);
+
+  if (control)
+    m_freem(control);
+
+	return (error);
+}
 
 int
 uinet_soreceive(struct uinet_socket *so, struct uinet_sockaddr **psa, struct uinet_uio *uio, int *flagsp)
@@ -915,6 +1031,16 @@ uinet_soreceive(struct uinet_socket *so, struct uinet_sockaddr **psa, struct uin
 	return (result);
 }
 
+
+int
+uinet_sononblocking(struct uinet_socket *so) 
+{
+  struct socket *so_internal = (struct socket *)so;
+  if(so_internal->so_state & SS_NBIO) {
+    return TRUE;
+  }
+  return FALSE;
+}
 
 void
 uinet_sosetnonblocking(struct uinet_socket *so, unsigned int nonblocking)
@@ -954,7 +1080,104 @@ uinet_sosetupcallprep(struct uinet_socket *so,
 	so_internal->so_upcallprep.soup_send_arg = soup_send_arg;
 }
 
+int
+uinet_sosendmsg(struct uinet_socket *so, struct uinet_msghdr *msg,int flags,ssize_t *len)
+{
+	struct mbuf *control;
+	struct sockaddr *to;
+	int error;
+  struct uio uio;
+  int i = 0;
+  struct msghdr *mp = (struct msghdr *)msg;
+	struct iovec iov[mp->msg_iovlen];
+  KASSERT(len,"len is NULL during sosendmsg");
 
+  if(len == NULL) {
+    return (EINVAL);
+  }
+
+	if (mp->msg_name != NULL) {
+		error = getsockaddr(&to, mp->msg_name, mp->msg_namelen);
+		if (error) {
+			to = NULL;
+			goto bad;
+		}
+		mp->msg_name = to;
+	} else {
+		to = NULL;
+	}
+
+	if (mp->msg_control) {
+		if (mp->msg_controllen < sizeof(struct cmsghdr)
+#ifdef COMPAT_OLDSOCK
+		    && mp->msg_flags != MSG_COMPAT
+#endif
+		) {
+			error = EINVAL;
+			goto bad;
+		}
+		error = sockargs(&control, mp->msg_control,
+		    mp->msg_controllen, MT_CONTROL);
+		if (error)
+			goto bad;
+#ifdef COMPAT_OLDSOCK
+		if (mp->msg_flags == MSG_COMPAT) {
+			struct cmsghdr *cm;
+
+			M_PREPEND(control, sizeof(*cm), M_WAIT);
+			cm = mtod(control, struct cmsghdr *);
+			cm->cmsg_len = control->m_len;
+			cm->cmsg_level = SOL_SOCKET;
+			cm->cmsg_type = SCM_RIGHTS;
+		}
+#endif
+	} else {
+		control = NULL;
+  }
+
+  uio.uio_resid = 0;
+  for (i = 0; i < mp->msg_iovlen; i++) {
+    iov[i].iov_base = mp->msg_iov[i].iov_base;
+    iov[i].iov_len = mp->msg_iov[i].iov_len;
+    uio.uio_resid += mp->msg_iov[i].iov_len;
+  }
+
+  uio.uio_iov = iov;
+  uio.uio_iovcnt = mp->msg_iovlen;
+  uio.uio_offset = 0;
+	uio.uio_segflg = UIO_SYSSPACE;
+	uio.uio_rw = UIO_WRITE;
+	uio.uio_td = curthread;
+
+	*len = uio.uio_resid;
+	error = sosend((struct socket *)so, mp->msg_name, &uio, 0, control, flags, curthread);
+
+	if (error) {
+		if (uio.uio_resid != *len && (error == ERESTART ||
+		    error == EINTR || error == EWOULDBLOCK)) {
+			error = 0;
+    }
+#if 0
+		/* Generation of SIGPIPE can be controlled per socket */
+		if (error == EPIPE && !(so->so_options & SO_NOSIGPIPE) &&
+		    !(flags & MSG_NOSIGNAL)) {
+			PROC_LOCK(td->td_proc);
+			tdsignal(td, SIGPIPE);
+			PROC_UNLOCK(td->td_proc);
+		}
+#endif
+	}
+
+	if (error == 0) {
+		*len = *len - uio.uio_resid;
+  }
+
+bad:
+	if (to)
+		free(to, M_SONAME);
+	return (error);
+
+}
 
 int
 uinet_sosend(struct uinet_socket *so, struct uinet_sockaddr *addr, struct uinet_uio *uio, int flags)
@@ -1000,6 +1223,13 @@ uinet_sogetpeeraddr(struct uinet_socket *so, struct uinet_sockaddr **sa)
 	return (*so_internal->so_proto->pr_usrreqs->pru_peeraddr)(so_internal, (struct sockaddr **)sa);
 }
 
+
+uint16_t
+uinet_sogetprotocol(struct uinet_socket *so)
+{
+  struct socket *so_internal = (struct socket *)so;
+  return so_internal->so_proto->pr_protocol;
+}
 
 int
 uinet_sogetsockaddr(struct uinet_socket *so, struct uinet_sockaddr **sa)
@@ -1156,6 +1386,7 @@ static struct syn_filter synf_uinet_api = {
 	uinet_api_synfilter_dtor,
 };
 
+#ifndef RIFT_UINET
 static moduledata_t synf_uinet_api_mod = {
 	"uinet_api_synf",
 	syn_filter_generic_mod_event,
@@ -1163,6 +1394,7 @@ static moduledata_t synf_uinet_api_mod = {
 };
 
 DECLARE_MODULE(synf_uinet_api, synf_uinet_api_mod, SI_SUB_DRIVERS, SI_ORDER_MIDDLE);
+#endif
 
 
 uinet_synf_deferral_t
@@ -1493,6 +1725,112 @@ uinet_lock_log_disable(void)
 	return (0);
 }
 
+
+void uinet_set_transmit_cback(void (*transmit_cback)(void *userdata, uint8_t *pkt, uint32_t len))
+{
+  uinet_transmit_cback = transmit_cback;
+}
+
+void
+uinet_packet_receive_handler(struct uinet_instance *uinst, uint8_t *buf, unsigned int size)
+{
+	struct ifnet *ifp = NULL;
+  struct mbuf *m;
+  struct vnet *rx_vnet;
+	m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
+
+	if (m == NULL) {
+		//ifp->if_iqdrops++;
+		return;
+  }
+
+  rx_vnet = uinst?(uinst->ui_vnet) : uinet_instance_default()->ui_vnet;
+  CURVNET_SET(rx_vnet);
+
+  struct ip *iphdr = (struct ip *)buf;
+  struct in_ifaddr *ia;  
+  uint32_t addr = ntohl(iphdr->ip_dst.s_addr);
+  TAILQ_FOREACH(ia, &V_in_ifaddrhead, ia_link) {
+    if((addr & ia->ia_subnetmask) == ia->ia_subnet) {
+      ifp = ia->ia_ifp;
+      break;
+    }
+  }
+
+	memcpy(mtod(m, uint8_t *), buf, size);
+	m->m_len = m->m_pkthdr.len = size;
+	m->m_pkthdr.rcvif = ifp;
+	//ifp->if_ipackets++;
+	//ifp->if_icopies++;
+	ip_input(m);
+	CURVNET_RESTORE();
+}
+
+void
+uinet_set_callout_context(void *callout) 
+{
+    uhi_tls_set(uinet_thread_callout_key,callout);
+}
+
+void uinet_callout_tick(void *context)
+{
+  /* This fn is called every 10 msec and updates ticks in libuinet stack code.
+   * 1 tick is 10 secs. 1 hz = 100 ticks */
+#ifdef RIFT_TIMER
+  if(uinet_init_completed) {
+    uhi_tls_set(uinet_thread_callout_key,context);
+    callout_tick(context);
+    uhi_tls_set(uinet_thread_callout_key,NULL);
+  }
+#endif
+}
+
+int
+uinet_packet_send_handler(struct uinet_socket *so, uint8_t *buf, unsigned int size,struct uinet_sockaddr *uso_addr, int flags)
+{
+  struct uinet_uio uio;
+  struct uinet_iovec iov;
+  int error;
+
+  uio.uio_iov = &iov;
+  iov.iov_base = (void *)buf;
+  iov.iov_len = size;
+  uio.uio_iovcnt = 1;
+  uio.uio_offset = 0;
+  uio.uio_resid = size;
+
+  error = uinet_sosend((struct uinet_socket *)so,uso_addr,
+                        &uio, flags);
+  return error;
+}
+
+void uinet_set_callout_cback(void *(*callout_cback)(void))
+{
+  uinet_get_callout_cback = callout_cback;
+}
+
+void *uinet_alloc_callout(void) 
+{
+#ifdef RIFT_TIMER
+  return alloc_callout();
+#else
+  return NULL;
+#endif
+}
+
+void uinet_set_curthread_cback(void *(*curthread_cback)(void))
+{
+  uinet_get_curthread_cback = curthread_cback;
+}
+
+void *uinet_alloc_curthread(void) 
+{
+#ifdef RIFT_TIMER
+  return uinet_thread_alloc(NULL);
+#else
+  return NULL;
+#endif
+}
 
 void
 uinet_instance_default_cfg(struct uinet_instance_cfg *cfg)

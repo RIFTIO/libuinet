@@ -110,6 +110,14 @@ static struct {
 	void *arg;
 } uhi_thread_hook_table[UHI_THREAD_NUM_HOOK_TYPES][UHI_MAX_THREAD_HOOKS];
 
+#ifndef CLOCK_MONOTONIC_FAST
+#define CLOCK_MONOTONIC_FAST 12 
+#endif
+
+#ifndef SIGEMT
+#define SIGEMT 7
+#endif
+
 static FILE *lock_log_fp = NULL;
 static pthread_mutex_t lock_log_mtx;
 static int lock_log_enabled = 0;
@@ -180,7 +188,6 @@ uhi_lock_log(const char *type, const char *what, void *lp, void *ptr, const char
 		return;
 
 	uhi_clock_gettime(UHI_CLOCK_MONOTONIC_FAST, &sec, &nsec);
-
 	curthr = uhi_thread_self();
 
 	/*
@@ -1283,6 +1290,12 @@ uhi_msg_sock_read(int fd, void *payload, unsigned int size)
 	return (result);
 }
 
+#ifdef RIFT_UINET
+void uinet_shutdown(unsigned int signo)
+{
+   fprintf(stderr, "uinet_shutdown<stub-called>\n");
+}
+#endif
 
 int
 uhi_msg_send(struct uhi_msg *msg, void *payload)

@@ -125,16 +125,24 @@ struct mod_metadata {
  */
 #define	MODULE_KERNEL_MAXVER	(roundup(__FreeBSD_version, 100000) - 1)
 
+#ifndef RIFT_UINET
 #define	DECLARE_MODULE_WITH_MAXVER(name, data, sub, order, maxver)	\
 	MODULE_DEPEND(name, kernel, __FreeBSD_version,			\
 	    __FreeBSD_version, maxver);			\
 	MODULE_METADATA(_md_##name, MDT_MODULE, &data, #name);		\
 	SYSINIT(name##module, sub, order, module_register_init, &data);	\
 	struct __hack
+#endif
+
+#ifdef RIFT_UINET
+#define	DECLARE_MODULE_WITH_MAXVER(name, data, sub, order, maxver)	\
+	MODULE_DEPEND(name, kernel, __FreeBSD_version,			\
+	    __FreeBSD_version, maxver);			\
+	MODULE_METADATA(_md_##name, MDT_MODULE, &data, #name)
+#endif
 
 #define	DECLARE_MODULE(name, data, sub, order)				\
 	DECLARE_MODULE_WITH_MAXVER(name, data, sub, order, MODULE_KERNEL_MAXVER)
-
 /*
  * The module declared with DECLARE_MODULE_TIED can only be loaded
  * into the kernel with exactly the same __FreeBSD_version.

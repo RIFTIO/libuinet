@@ -431,8 +431,10 @@ hhook_vnet_uninit(const void *unused __unused)
 	 */
 	HHHLIST_LOCK();
 	LIST_FOREACH_SAFE(hhh, &V_hhook_head_list, hhh_next, tmphhh) {
+#ifndef RIFT_UINET
 		printf("%s: hhook_head type=%d, id=%d cleanup required\n",
 		    __func__, hhh->hhh_type, hhh->hhh_id);
+#endif
 		hhook_head_destroy(hhh);
 	}
 	HHHLIST_UNLOCK();

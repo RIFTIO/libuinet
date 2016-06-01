@@ -62,6 +62,9 @@ typedef struct nvlist nvlist_t;
 #define	NV_TYPE_DESCRIPTOR		6
 #define	NV_TYPE_BINARY			7
 
+#ifndef __printflike
+#define __printflike(a, b) __attribute__((__format__(__printf__, a, b)))
+#endif
 /*
  * Perform case-insensitive lookups of provided names.
  */

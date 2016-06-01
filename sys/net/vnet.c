@@ -329,15 +329,23 @@ vnet0_init(void *arg)
 	 * otherwise CURVNET_SET() macros would scream about unnecessary
 	 * curvnet recursions.
 	 */
+#ifdef RIFT_UINET
+	prison0.pr_vnet = vnet0 = vnet_alloc();
+  uhi_tls_set(uinet_vnet_key, (prison0.pr_vnet));
+#else
 	curvnet = prison0.pr_vnet = vnet0 = vnet_alloc();
+#endif
 }
 SYSINIT(vnet0_init, SI_SUB_VNET, SI_ORDER_FIRST, vnet0_init, NULL);
 
 static void
 vnet_init_done(void *unused)
 {
-
+#ifdef RIFT_UINET
+  uhi_tls_set(uinet_vnet_key, (NULL));
+#else
 	curvnet = NULL;
+#endif
 }
 
 SYSINIT(vnet_init_done, SI_SUB_VNET_DONE, SI_ORDER_FIRST, vnet_init_done,

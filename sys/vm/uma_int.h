@@ -199,7 +199,11 @@ struct uma_cache {
 typedef struct uma_cache * uma_cache_t;
 
 #ifdef UINET
+#ifdef RIFT_UINET
+#define UMA_CACHE_TABLE_SLOTS 1024
+#else
 #define UMA_CACHE_TABLE_SLOTS 128
+#endif
 struct uma_tls {
 	TAILQ_ENTRY(uma_tls) ut_link;	/* Link into uma tls list */
 	struct uma_cache ut_caches[UMA_CACHE_TABLE_SLOTS];
@@ -403,8 +407,12 @@ void uma_large_free(uma_slab_t slab);
 /* Cache Macros */
 
 #ifdef UINET
-
+#ifdef RIFT_UINET
+extern struct uma_tls my_tls;
+#define CACHE_ENTER(zone) &my_tls.ut_caches[zone->uz_cacheidx]
+#else
 #define CACHE_ENTER(zone) &((struct uma_tls *)uhi_tls_get(uma_tls_key))->ut_caches[zone->uz_cacheidx]
+#endif
 #define CACHE_EXIT(zone)
 #define CACHE_FOREACH(zone, cache)					\
 	for (uma_tls_t tls = TAILQ_FIRST(&uma_tls_list);		\

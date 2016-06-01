@@ -61,6 +61,23 @@ uinet_dpcpu_init(void)
 struct pcpu *
 uinet_pcpu_get(void)
 {
+#ifdef RIFT_UINET
+  return (&pcpup[0]);
+#else
 	KASSERT(curthread->td_oncpu < mp_ncpus, ("curthread->td_oncpu >= mp_ncpus"));
 	return (&pcpup[curthread->td_oncpu]);
+#endif
 }
+
+#if 0
+extern void *(*uinet_get_curthread_cback)(void);
+void *uinet_curthread_get(void) 
+{
+  struct uinet_thread *uinet_td= NULL;
+  void *td = &thread0;
+  if(*uinet_get_curthread_cback) {
+    td = (uinet_td = (*uinet_get_curthread_cback)())?uinet_td->td:&thread0;
+  }
+  return td;
+}
+#endif

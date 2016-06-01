@@ -627,6 +627,7 @@ ether_ipfw_chk(struct mbuf **m0, struct ifnet *dst, int shared)
  * Process a received Ethernet packet; the packet is in the
  * mbuf chain m with the ethernet header at the front.
  */
+#ifndef RIFT_UINET
 static void
 ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 {
@@ -949,7 +950,9 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	ether_demux(ifp, m);
 	CURVNET_RESTORE();
 }
+#endif
 
+#ifndef RIFT_UINET
 /*
  * Ethernet input dispatch; by default, direct dispatch here regardless of
  * global configuration.
@@ -976,6 +979,7 @@ ether_init(__unused void *arg)
 	netisr_register(&ether_nh);
 }
 SYSINIT(ether, SI_SUB_INIT_IF, SI_ORDER_ANY, ether_init, NULL);
+#endif
 
 static void
 ether_input(struct ifnet *ifp, struct mbuf *m)
@@ -1211,8 +1215,10 @@ ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 	for (i = 0; i < ifp->if_addrlen; i++)
 		if (lla[i] != 0)
 			break; 
+#ifndef RIFT_UINET
 	if (i != ifp->if_addrlen)
 		if_printf(ifp, "Ethernet address: %6D\n", lla, ":");
+#endif
 }
 #pragma GCC diagnostic error "-Wformat"
 #pragma GCC diagnostic error "-Wformat-extra-args"
@@ -1223,7 +1229,7 @@ ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 void
 ether_ifdetach(struct ifnet *ifp)
 {
-	if (IFP2AC(ifp)->ac_netgraph != NULL) {
+	if ( IFP2AC(ifp) && IFP2AC(ifp)->ac_netgraph != NULL) {
 		KASSERT(ng_ether_detach_p != NULL,
 		    ("ng_ether_detach_p is NULL"));
 		(*ng_ether_detach_p)(ifp);
@@ -1259,7 +1265,7 @@ SYSCTL_VNET_INT(_net_link_ether, OID_AUTO, ipfw, CTLFLAG_RW,
 	     &VNET_NAME(ether_ipfw), 0, "Pass ether pkts through firewall");
 #endif
 
-#if 0
+#ifndef RIFT_UINET 
 /*
  * This is for reference.  We have a table-driven version
  * of the little-endian crc32 generator, which is faster
@@ -1348,7 +1354,9 @@ ether_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 #ifdef INET
 		case AF_INET:
 			ifp->if_init(ifp->if_softc);	/* before arpwhohas */
+#ifndef RIFT_UINET
 			arp_ifinit(ifp, ifa);
+#endif
 			break;
 #endif
 #ifdef IPX
@@ -1492,6 +1500,7 @@ ether_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
 	}
 }
 
+#ifndef RIFT_UINET
 static void*
 ether_alloc(u_char type, struct ifnet *ifp)
 {
@@ -1509,7 +1518,9 @@ ether_free(void *com, u_char type)
 
 	free(com, M_ARPCOM);
 }
+#endif
 
+#ifndef RIFT_UINET
 static int
 ether_modevent(module_t mod, int type, void *data)
 {
@@ -1527,13 +1538,12 @@ ether_modevent(module_t mod, int type, void *data)
 
 	return (0);
 }
-
 static moduledata_t ether_mod = {
 	"ether",
 	ether_modevent,
 	0
 };
-
+#endif
 void
 ether_vlan_mtap(struct bpf_if *bp, struct mbuf *m, void *data, u_int dlen)
 {
@@ -1602,5 +1612,7 @@ ether_vlanencap(struct mbuf *m, uint16_t tag)
 	return (m);
 }
 
+#ifndef RIFT_UINET
 DECLARE_MODULE(ether, ether_mod, SI_SUB_INIT_IF, SI_ORDER_ANY);
 MODULE_VERSION(ether, 1);
+#endif

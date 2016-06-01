@@ -947,7 +947,7 @@ syncache_synthesize_synack(struct syncache *sc, struct tcphdr **pth)
 		ip = mtod(m, struct ip *);
 		ip->ip_v = IPVERSION;
 		ip->ip_hl = sizeof(struct ip) >> 2;
-		ip->ip_len = tlen;
+		ip->ip_len = htons(tlen);
 		ip->ip_id = 0;
 		ip->ip_off = 0;
 		ip->ip_sum = 0;
@@ -2409,6 +2409,7 @@ syncache_respond(struct syncache *sc)
 		m->m_pkthdr.csum_flags = CSUM_TCP;
 		th->th_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr,
 		    htons(tlen + optlen - hlen + IPPROTO_TCP));
+		//printf("Suresh: ERROR checksum value is %x\n",th->th_sum);
 		error = ip_output(m, sc->sc_ipopts, NULL, 0, NULL, NULL);
 	}
 #endif

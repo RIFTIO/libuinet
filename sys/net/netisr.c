@@ -752,6 +752,7 @@ netisr_select_cpuid(struct netisr_proto *npp, u_int dispatch_policy,
 	return (m);
 }
 
+#ifndef RIFT_UINET 
 /*
  * Process packets associated with a workstream and protocol.  For reasons of
  * fairness, we process up to one complete netisr queue at a time, moving the
@@ -863,6 +864,7 @@ out:
 	netisr_pollmore();
 #endif
 }
+#endif
 
 static int
 netisr_queue_workstream(struct netisr_workstream *nwsp, u_int proto,
@@ -1120,6 +1122,7 @@ netisr_sched_poll(void)
 }
 #endif
 
+#ifndef RIFT_UINET
 static void
 netisr_start_swi(u_int cpuid, struct pcpu *pc)
 {
@@ -1234,6 +1237,7 @@ netisr_start(void *arg)
 	}
 }
 SYSINIT(netisr_start, SI_SUB_SMP, SI_ORDER_MIDDLE, netisr_start, NULL);
+#endif
 
 /*
  * Sysctl monitoring for netisr: query a list of registered protocols.

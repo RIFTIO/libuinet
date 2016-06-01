@@ -41,6 +41,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include "opt_param.h"
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/bus.h>
@@ -89,6 +91,8 @@ int callwheelsize, callwheelbits, callwheelmask;
 
 struct cv callout_cv;
 
+static int timeout_cpu;
+
 struct callout_cpu {
 	struct mtx		cc_lock;
 	struct callout		*cc_callout;
@@ -100,11 +104,42 @@ struct callout_cpu {
 	int 			cc_softticks;
 	int			cc_cancel;
 	int			cc_waiting;
+#ifdef RIFT_TIMER
+	int 	  ticks;  /* maintain ticks per queue; updated every 10 msecs */
+#endif
 };
 
 #ifdef SMP
 struct callout_cpu cc_cpu[MAXCPU];
+extern void *(*uinet_get_callout_cback)(void);
+#ifndef RIFT_TIMER
 #define	CC_CPU(cpu)	(&cc_cpu[(cpu)])
+#else 
+#if 0
+static void *uinet_callout_get(int cpu) 
+{
+  void *cc_ptr= NULL;
+  void *callout = &cc_cpu[timeout_cpu];
+  if(*uinet_get_callout_cback) {
+    callout = (cc_ptr = (*uinet_get_callout_cback)())?cc_ptr:&cc_cpu[timeout_cpu];
+  }
+  return callout;
+}
+#define CC_CPU(cpu)  uinet_callout_get(cpu)
+#endif
+
+static void *uinet_callout_get(int cpu) 
+{
+  void *cc_ptr = uhi_tls_get(uinet_thread_callout_key);
+  if(!cc_ptr) {
+    cc_ptr = &cc_cpu[cpu];
+  }
+  return cc_ptr;
+
+}
+#define CC_CPU(cpu)  uinet_callout_get(cpu)
+
+#endif
 #define	CC_SELF()	CC_CPU(PCPU_GET(cpuid))
 #else
 struct callout_cpu cc_cpu;
@@ -114,9 +149,24 @@ struct callout_cpu cc_cpu;
 #define	CC_LOCK(cc)	mtx_lock(&(cc)->cc_lock)
 #define	CC_UNLOCK(cc)	mtx_unlock(&(cc)->cc_lock)
 
-static int timeout_cpu;
 
 MALLOC_DEFINE(M_CALLOUT, "callout", "Callout datastructures");
+
+#ifdef RIFT_TIMER
+void *alloc_callout(void) 
+{
+	caddr_t v;
+  struct callout_cpu *cc;
+  ncallout = HZ * 3600;
+  cc = malloc(sizeof(struct callout_cpu) , M_DEVBUF,M_ZERO);
+  memset(cc,0,sizeof(struct callout_cpu));
+  v = 0;
+  v = kern_timeout_callwheel_alloc(v,cc);
+  kern_timeout_callwheel_alloc(malloc(round_page((vm_offset_t)v), M_DEVBUF, M_ZERO),cc);
+  kern_timeout_callwheel_init(cc);
+  return cc;
+}
+#endif
 
 /**
  * Locked by cc_lock:
@@ -142,7 +192,7 @@ MALLOC_DEFINE(M_CALLOUT, "callout", "Callout datastructures");
  *	and may be called more then once.
  */
 caddr_t
-kern_timeout_callwheel_alloc(caddr_t v)
+kern_timeout_callwheel_alloc(caddr_t v,void * cc_ptr)
 {
 	struct callout_cpu *cc;
 
@@ -151,7 +201,12 @@ kern_timeout_callwheel_alloc(caddr_t v)
 #else
 	timeout_cpu = 0;
 #endif	
-	cc = CC_CPU(timeout_cpu);
+  if(cc_ptr == NULL) {
+    cc = &cc_cpu[timeout_cpu];
+  }
+  else {
+    cc = (struct callout_cpu *)cc_ptr;
+  }
 	/*
 	 * Calculate callout wheel size
 	 */
@@ -160,7 +215,6 @@ kern_timeout_callwheel_alloc(caddr_t v)
 	     callwheelsize <<= 1, ++callwheelbits)
 		;
 	callwheelmask = callwheelsize - 1;
-	printf("callwheelsize=%d\n", callwheelsize);
 	cc->cc_callout = (struct callout *)v;
 	v = (caddr_t)(cc->cc_callout + ncallout);
 	cc->cc_callwheel = (struct callout_tailq *)v;
@@ -197,10 +251,14 @@ callout_cpu_init(struct callout_cpu *cc)
  *	callout wheel has been finalized.
  */
 void
-kern_timeout_callwheel_init(void)
+kern_timeout_callwheel_init(void *cc_ptr)
 {
-	
-	callout_cpu_init(CC_CPU(timeout_cpu));
+  if(cc_ptr == NULL) {  
+    callout_cpu_init(&cc_cpu[timeout_cpu]);
+  }
+  else {
+    callout_cpu_init(cc_ptr);
+  }
 }
 
 /*
@@ -227,12 +285,14 @@ start_softclock(void *dummy)
 	cc->cc_cookie = softclock_ih;
 
 #ifdef SMP
+  //printf("Value of max cpu is %d\n", mp_maxid);
 	for (cpu = 0; cpu <= mp_maxid; cpu++) {
 		if (cpu == timeout_cpu)
 			continue;
 		if (CPU_ABSENT(cpu))
 			continue;
 		cc = CC_CPU(cpu);
+    //cc = &cc_cpu[cpu];
 		if (swi_add(NULL, "clock", softclock, cc, SWI_CLOCK,
 		    INTR_MPSAFE, &cc->cc_cookie))
 			panic("died while creating standard software ithreads");
@@ -247,8 +307,14 @@ start_softclock(void *dummy)
 
 SYSINIT(start_softclock, SI_SUB_SOFTINTR, SI_ORDER_FIRST, start_softclock, NULL);
 
+
+#ifndef RIFT_TIMER
 void
 callout_tick(void)
+#else
+void
+callout_tick(void *cc_ptr)
+#endif
 {
 	struct callout_cpu *cc;
 	int need_softclock;
@@ -259,9 +325,27 @@ callout_tick(void)
 	 * relatively high clock interrupt priority any longer than necessary.
 	 */
 	need_softclock = 0;
+#ifndef RIFT_TIMER
 	cc = CC_SELF();
+#else
+  if(cc_ptr) {
+    cc = (struct callout_cpu *)cc_ptr;
+    /* IF RIFT dispatch timer is used this fn is called every 10 msecs. 
+     * 1 ticks = 10 msecs. 1 hz = 100 ticks */
+    cc->ticks++;
+  }
+  else {
+    cc = &cc_cpu[timeout_cpu];
+    //cc = CC_SELF();
+    cc->ticks++;
+  }
+#endif
 	mtx_lock(&cc->cc_lock);
+#ifdef RIFT_TIMER
+	for (; (cc->cc_softticks - cc->ticks) < 0; cc->cc_softticks++) {
+#else
 	for (; (cc->cc_softticks - ticks) < 0; cc->cc_softticks++) {
+#endif
 		bucket = cc->cc_softticks & callwheelmask;
 		if (!TAILQ_EMPTY(&cc->cc_callwheel[bucket])) {
 			need_softclock = 1;
@@ -340,7 +424,11 @@ softclock(void *arg)
 	steps = 0;
 	cc = (struct callout_cpu *)arg;
 	CC_LOCK(cc);
-	while (cc->cc_softticks != ticks) {
+#ifdef RIFT_TIMER
+  while (cc->cc_softticks != cc->ticks) {
+#else
+    while (cc->cc_softticks != ticks) {
+#endif
 		/*
 		 * cc_softticks may be modified by hard clock, so cache
 		 * it while we work on a given bucket.
@@ -362,8 +450,8 @@ softclock(void *arg)
 					CC_LOCK(cc);
 					c = cc->cc_next;
 					steps = 0;
-				}
-			} else {
+        }
+      } else {
 				void (*c_func)(void *);
 				void *c_arg;
 				struct lock_class *class;
@@ -641,7 +729,11 @@ retry:
 	c->c_arg = arg;
 	c->c_flags |= (CALLOUT_ACTIVE | CALLOUT_PENDING);
 	c->c_func = ftn;
+#ifdef RIFT_TIMER
+	c->c_time = cc->ticks + to_ticks;
+#else
 	c->c_time = ticks + to_ticks;
+#endif
 	TAILQ_INSERT_TAIL(&cc->cc_callwheel[c->c_time & callwheelmask], 
 			  c, c_links.tqe);
 	CTR5(KTR_CALLOUT, "%sscheduled %p func %p arg %p in %d",
@@ -795,7 +887,6 @@ _callout_init_lock(c, lock, flags)
 extern int     sched_get_priority_max(int);
 extern int     sched_get_priority_min(int);
 
-
 static void
 timer_intr(void *arg)
 {
@@ -838,6 +929,7 @@ timer_intr(void *arg)
 	uhi_clock_gettime(UHI_CLOCK_MONOTONIC, &sec, &nsec);
 	start.tv_sec = sec;
 	start.tv_nsec = nsec;
+
 	while (1) {
 		uhi_nanosleep(UHI_TS_TO_NSEC(tick_period));
 

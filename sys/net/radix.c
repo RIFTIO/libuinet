@@ -1137,7 +1137,8 @@ rn_inithead(head, off)
 	register struct radix_node *t, *tt, *ttt;
 	if (*head)
 		return (1);
-	R_Zalloc(rnh, struct radix_node_head *, sizeof (*rnh));
+	R_Malloc(rnh, struct radix_node_head *, sizeof (*rnh));
+  memset(rnh,0,sizeof (*rnh));
 	if (rnh == 0)
 		return (0);
 #ifdef _KERNEL

@@ -85,12 +85,18 @@ extern int sctp_logoff_stuff;
 #define SCTP_STATLOG_UNLOCK()
 #define SCTP_STATLOG_DESTROY()
 
+#ifdef RIFT_UINET
+#define SCTP_INP_INFO_LOCK_DESTROY() do { \
+        rw_destroy(&SCTP_BASE_INFO(ipi_ep_mtx)); \
+      }  while (0)
+#else
 #define SCTP_INP_INFO_LOCK_DESTROY() do { \
         if(rw_wowned(&SCTP_BASE_INFO(ipi_ep_mtx))) { \
              rw_wunlock(&SCTP_BASE_INFO(ipi_ep_mtx)); \
         } \
         rw_destroy(&SCTP_BASE_INFO(ipi_ep_mtx)); \
       }  while (0)
+#endif
 
 #define SCTP_INP_INFO_LOCK_INIT() \
         rw_init(&SCTP_BASE_INFO(ipi_ep_mtx), "sctp-info");
@@ -151,15 +157,23 @@ extern int sctp_logoff_stuff;
 #define SCTP_INP_INFO_RUNLOCK()		rw_runlock(&SCTP_BASE_INFO(ipi_ep_mtx))
 #define SCTP_INP_INFO_WUNLOCK()		rw_wunlock(&SCTP_BASE_INFO(ipi_ep_mtx))
 
-
 #define SCTP_IPI_ADDR_INIT()								\
         rw_init(&SCTP_BASE_INFO(ipi_addr_mtx), "sctp-addr")
+
+#ifdef RIFT_UINET
+#define SCTP_IPI_ADDR_DESTROY() do  { \
+	rw_destroy(&SCTP_BASE_INFO(ipi_addr_mtx)); \
+      }  while (0)
+
+#else
 #define SCTP_IPI_ADDR_DESTROY() do  { \
         if(rw_wowned(&SCTP_BASE_INFO(ipi_addr_mtx))) { \
              rw_wunlock(&SCTP_BASE_INFO(ipi_addr_mtx)); \
         } \
 	rw_destroy(&SCTP_BASE_INFO(ipi_addr_mtx)); \
       }  while (0)
+#endif
+
 #define SCTP_IPI_ADDR_RLOCK()	do { 					\
              rw_rlock(&SCTP_BASE_INFO(ipi_addr_mtx));                         \
 } while (0)
@@ -230,11 +244,16 @@ extern int sctp_logoff_stuff;
 #define SCTP_INP_LOCK_DESTROY(_inp) \
 	mtx_destroy(&(_inp)->inp_mtx)
 
+#ifdef RIFT_UINET
+#define SCTP_INP_LOCK_CONTENDED(_inp) ((uint64_t)(_inp)->inp_mtx.mtx_lock & MTX_CONTESTED)
+#define SCTP_INP_READ_CONTENDED(_inp) ((uint64_t)(_inp)->inp_rdata_mtx.mtx_lock & MTX_CONTESTED)
+#define SCTP_ASOC_CREATE_LOCK_CONTENDED(_inp) ((uint64_t)(_inp)->inp_create_mtx.mtx_lock & MTX_CONTESTED)
+#else
 #define SCTP_INP_LOCK_CONTENDED(_inp) ((_inp)->inp_mtx.mtx_lock & MTX_CONTESTED)
-
 #define SCTP_INP_READ_CONTENDED(_inp) ((_inp)->inp_rdata_mtx.mtx_lock & MTX_CONTESTED)
-
 #define SCTP_ASOC_CREATE_LOCK_CONTENDED(_inp) ((_inp)->inp_create_mtx.mtx_lock & MTX_CONTESTED)
+
+#endif
 
 
 #define SCTP_ASOC_CREATE_LOCK_DESTROY(_inp) \

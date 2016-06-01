@@ -34,8 +34,9 @@ __FBSDID("$FreeBSD: release/9.1.0/sys/netinet/sctp_dtrace_define.h 237896 2012-0
 
 #ifndef _NETINET_SCTP_DTRACE_DEFINE_H_
 #define _NETINET_SCTP_DTRACE_DEFINE_H_
-
+#ifndef RIFT_UINET
 #include "opt_kdtrace.h"
+#endif
 #include <sys/kernel.h>
 #include <sys/sdt.h>
 

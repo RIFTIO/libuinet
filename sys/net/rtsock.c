@@ -226,7 +226,9 @@ rts_init(void)
 
 	if (TUNABLE_INT_FETCH("net.route.netisr_maxqlen", &tmp))
 		rtsock_nh.nh_qlimit = tmp;
+#ifndef RIFT_UINET
 	netisr_register(&rtsock_nh);
+#endif
 }
 SYSINIT(rtsock, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, rts_init, 0);
 

@@ -44,8 +44,10 @@ __FBSDID("$FreeBSD: release/9.1.0/sys/kern/subr_taskqueue.c 225570 2011-09-15 08
 #include <machine/stdarg.h>
 
 static MALLOC_DEFINE(M_TASKQUEUE, "taskqueue", "Task Queues");
+#ifndef RIFT_UINET
 static void	*taskqueue_giant_ih;
 static void	*taskqueue_ih;
+#endif
 
 struct taskqueue_busy {
 	struct task	*tb_running;
@@ -405,7 +407,7 @@ taskqueue_drain_timeout(struct taskqueue *queue,
 	callout_drain(&timeout_task->c);
 	taskqueue_drain(queue, &timeout_task->t);
 }
-
+#ifndef RIFT_UINET
 static void
 taskqueue_swi_enqueue(void *context)
 {
@@ -429,7 +431,7 @@ taskqueue_swi_giant_run(void *dummy)
 {
 	taskqueue_run(taskqueue_swi_giant);
 }
-
+#endif
 int
 taskqueue_start_threads(struct taskqueue **tqp, int count, int pri,
 			const char *name, ...)
@@ -516,7 +518,7 @@ taskqueue_thread_loop(void *arg)
 	TQ_UNLOCK(tq);
 	kthread_exit();
 }
-
+#ifndef RIFT_UINET
 void
 taskqueue_thread_enqueue(void *context)
 {
@@ -538,7 +540,7 @@ TASKQUEUE_DEFINE(swi_giant, taskqueue_swi_giant_enqueue, NULL,
 		     NULL, SWI_TQ_GIANT, 0, &taskqueue_giant_ih)); 
 
 TASKQUEUE_DEFINE_THREAD(thread);
-
+#endif
 struct taskqueue *
 taskqueue_create_fast(const char *name, int mflags,
 		 taskqueue_enqueue_fn enqueue, void *context)
@@ -554,6 +556,7 @@ taskqueue_enqueue_fast(struct taskqueue *queue, struct task *task)
 	return taskqueue_enqueue(queue, task);
 }
 
+#ifndef RIFT_UINET
 static void	*taskqueue_fast_ih;
 
 static void
@@ -571,6 +574,7 @@ taskqueue_fast_run(void *dummy)
 TASKQUEUE_FAST_DEFINE(fast, taskqueue_fast_enqueue, NULL,
 	swi_add(NULL, "Fast task queue", taskqueue_fast_run, NULL,
 	SWI_TQ_FAST, INTR_MPSAFE, &taskqueue_fast_ih));
+#endif
 
 int
 taskqueue_member(struct taskqueue *queue, struct thread *td)

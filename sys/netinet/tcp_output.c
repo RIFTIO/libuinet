@@ -466,9 +466,16 @@ after_sack_rexmit:
 		    so->so_snd.sb_cc >= (so->so_snd.sb_hiwat / 8 * 7) &&
 		    so->so_snd.sb_cc < V_tcp_autosndbuf_max &&
 		    sendwin >= (so->so_snd.sb_cc - (tp->snd_nxt - tp->snd_una))) {
+#ifdef RIFT_UINET 
+			if (!sbreserve_locked(&so->so_snd,
+			    min(so->so_snd.sb_hiwat + V_tcp_autosndbuf_inc,
+			     V_tcp_autosndbuf_max), so))
+#else 
 			if (!sbreserve_locked(&so->so_snd,
 			    min(so->so_snd.sb_hiwat + V_tcp_autosndbuf_inc,
 			     V_tcp_autosndbuf_max), so, curthread))
+
+#endif
 				so->so_snd.sb_flags &= ~SB_AUTOSIZE;
 		}
 	}

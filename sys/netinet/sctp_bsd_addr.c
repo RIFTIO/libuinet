@@ -111,12 +111,23 @@ sctp_startup_iterator(void)
 	SCTP_ITERATOR_LOCK_INIT();
 	SCTP_IPI_ITERATOR_WQ_INIT();
 	TAILQ_INIT(&sctp_it_ctl.iteratorhead);
+
+#if RIFT_UINET
+  ret = kthread_add(sctp_iterator_thread,
+	    (void *)NULL,
+      NULL,
+	    &sctp_it_ctl.thread_proc,
+	    RFPROC,
+	    SCTP_KTHREAD_PAGES,
+	    SCTP_KTRHEAD_NAME);
+#else
 	ret = kproc_create(sctp_iterator_thread,
 	    (void *)NULL,
 	    &sctp_it_ctl.thread_proc,
 	    RFPROC,
 	    SCTP_KTHREAD_PAGES,
 	    SCTP_KTRHEAD_NAME);
+#endif
 }
 
 #ifdef INET6

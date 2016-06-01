@@ -115,7 +115,11 @@ void	vnet_destroy(struct vnet *vnet);
  * The current virtual network stack -- we may wish to move this to struct
  * pcpu in the future.
  */
+#ifndef RIFT_UINET
 #define	curvnet	curthread->td_vnet
+#else
+#define curvnet ((struct vnet *)uhi_tls_get(uinet_vnet_key))
+#endif
 
 /*
  * Various macros -- get and set the current network stack, but also
@@ -159,12 +163,13 @@ void vnet_log_recursion(struct vnet *, const char *, int);
 	curthread->td_vnet_lpush = saved_vnet_lpush;
 #else /* !VNET_DEBUG */
 
+#ifndef RIFT_UINET
 #define	CURVNET_SET_QUIET(arg)						\
 	VNET_ASSERT((arg) != NULL && (arg)->vnet_magic_n == VNET_MAGIC_N, \
 	    ("CURVNET_SET at %s:%d %s() curvnet=%p vnet=%p",		\
 	    __FILE__, __LINE__, __func__, curvnet, (arg)));		\
-	struct vnet *saved_vnet = curvnet;				\
-	curvnet = arg;	
+    	struct vnet *saved_vnet = curvnet;				\
+      curvnet = arg;	
  
 #define	CURVNET_SET_VERBOSE(arg)					\
 	CURVNET_SET_QUIET(arg)
@@ -176,7 +181,27 @@ void vnet_log_recursion(struct vnet *, const char *, int);
 	    saved_vnet->vnet_magic_n == VNET_MAGIC_N),			\
 	    ("CURVNET_RESTORE at %s:%d %s() curvnet=%p saved_vnet=%p",	\
 	    __FILE__, __LINE__, __func__, curvnet, saved_vnet));	\
-	curvnet = saved_vnet;
+	    curvnet = saved_vnet;
+#else
+#define	CURVNET_SET_QUIET(arg)						\
+	VNET_ASSERT((arg) != NULL && (arg)->vnet_magic_n == VNET_MAGIC_N, \
+	    ("CURVNET_SET at %s:%d %s() curvnet=%p vnet=%p",		\
+	    __FILE__, __LINE__, __func__, curvnet, (arg)));		\
+      struct vnet *saved_vnet = uhi_tls_get(uinet_vnet_key); \
+      uhi_tls_set(uinet_vnet_key, (arg));
+ 
+#define	CURVNET_SET_VERBOSE(arg)					\
+	CURVNET_SET_QUIET(arg)
+
+#define	CURVNET_SET(arg)	CURVNET_SET_VERBOSE(arg)
+ 
+#define	CURVNET_RESTORE()						\
+	VNET_ASSERT(curvnet != NULL && (saved_vnet == NULL ||		\
+	    saved_vnet->vnet_magic_n == VNET_MAGIC_N),			\
+	    ("CURVNET_RESTORE at %s:%d %s() curvnet=%p saved_vnet=%p",	\
+	    __FILE__, __LINE__, __func__, curvnet, saved_vnet));	\
+  uhi_tls_set(uinet_vnet_key,saved_vnet);
+#endif
 #endif /* VNET_DEBUG */
 
 extern struct vnet *vnet0;

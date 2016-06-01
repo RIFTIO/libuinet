@@ -9,6 +9,7 @@ API_INCLUDES_ROOT:=${CURDIR}/api_include
 MACHINE_INCLUDES_ROOT:=${CURDIR}/machine_include
 OVERRIDE_INCLUDES_ROOT:=${CURDIR}/override_include
 X86_INCLUDES=0
+SCTP=1
 
 include ${TOPDIR}/mk/kern.pre.mk
 include ${TOPDIR}/cflags.mk
@@ -27,6 +28,7 @@ ifdef NETMAP_INCLUDES
 HOST_INCLUDES+= -I${NETMAP_INCLUDES}
 endif
 
+CFLAGS += -fPIC
 HOST_C= ${CC} -c ${CFLAGS} ${HOST_INCLUDES} ${WERROR} ${PROF} $<
 
 
@@ -78,6 +80,13 @@ endif
 
 
 CFLAGS+= -DUINET=1
+CFLAGS+= -fPIC
+CFLAGS+= -DRIFT_UINET=1
+CFLAGS+= -DRIFT_TIMER=1
+ifeq (${SCTP},1)
+CFLAGS+= -DSCTP
+endif
+
 
 VPATH+= $S/${MACHINE_CPUARCH}/${MACHINE_CPUARCH}
 VPATH+= $S/kern
@@ -99,6 +108,8 @@ UINET_SRCS+=			\
 	uinet_elf_machdep.c	\
 	uinet_if_bridge.c	\
 	uinet_if_pcap.c		\
+	uinet_if_raw.c		\
+	uinet_if_fpath.c	\
 	uinet_if_span.c		\
 	uinet_init.c		\
 	uinet_init_main.c	\
@@ -111,8 +122,8 @@ UINET_SRCS+=			\
 	uinet_kern_jail.c	\
 	uinet_kern_kthread.c	\
 	uinet_kern_lock.c	\
-	uinet_kern_malloc.c	\
 	uinet_kern_mib.c	\
+	uinet_kern_malloc.c     \
 	uinet_kern_mutex.c	\
 	uinet_kern_priv.c	\
 	uinet_kern_proc.c	\
@@ -153,7 +164,7 @@ UINET_SRCS+=			\
 	uinet_vm_object.c
 
 ifneq (${HOST_OS},Darwin)
-UINET_SRCS+= uinet_if_netmap.c
+UINET_SRCS+= #uinet_if_netmap.c
 endif
 
 
@@ -161,11 +172,12 @@ UINET_HOST_SRCS+=		\
 	uinet_api_errno.c	\
 	uinet_host_interface.c	\
 	uinet_if_pcap_host.c	\
-	uinet_kern_shutdown.c	\
-	uinet_host_sysctl_api.c
+	uinet_if_raw_host.c	\
+	uinet_kern_shutdown.c	
+	#uinet_host_sysctl_api.c \
 
 ifneq (${HOST_OS},Darwin)
-UINET_HOST_SRCS+= uinet_if_netmap_host.c
+UINET_HOST_SRCS+= #uinet_if_netmap_host.c
 endif
 
 
@@ -288,6 +300,26 @@ NETINET_SRCS+=		\
 	cc.c		\
 	cc_newreno.c
 
+SCTP_SRCS+=
+ifeq (${SCTP},1)
+SCTP_SRCS+= \
+	sctp_usrreq.c \
+	sctp_asconf.c \
+	sctp_auth.c \
+	sctp_bsd_addr.c \
+	sctp_crc32.c \
+	sctp_indata.c \
+	sctp_input.c \
+	sctp_output.c \
+	sctp_pcb.c \
+	sctp_peeloff.c \
+	sctp_ss_functions.c \
+	sctp_sysctl.c \
+	sctp_timer.c \
+	sctp_cc_functions.c \
+	sctputil.c
+endif
+
 
 NETINET6_SRCS+=
 
@@ -302,7 +334,7 @@ MHEADERS+= vnode_if.h vnode_if_newproto.h vnode_if_typedef.h
 MSRCS= $(patsubst %.m,%.c,${KERN_MSRCS})
 
 SRCS=  ${UINET_SRCS} ${CRYPTO_SRCS} ${KERN_SRCS} ${LIBKERN_SRCS} ${MACHINE_SRCS}
-SRCS+= ${MSRCS} ${NET_SRCS} ${NETINET_SRCS} ${NETINET6_SRCS} ${VM_SRCS}
+SRCS+= ${MSRCS} ${NET_SRCS} ${NETINET_SRCS} ${NETINET6_SRCS} ${VM_SRCS} ${SCTP_SRCS}
 
 # If witness is enabled.
 # SRCS+= ${KERN_WITNESS_SRCS}
@@ -312,7 +344,7 @@ HOST_SRCS = ${UINET_HOST_SRCS}
 OBJS+= $(patsubst %.c,%.o,${SRCS})
 HOST_OBJS+= $(patsubst %.c,%.o,${HOST_SRCS})
 
-all: libuinet.a
+all: libuinet.so
 
 #
 # The library is built by first incrementally linking all the object
@@ -320,7 +352,7 @@ all: libuinet.a
 # Then, only the symbols that are part of the UINET API are made
 # externally available.
 #
-libuinet.a: machine_includes uinet_api.symlist ${MHEADERS} ${MSRCS} ${HOST_OBJS} ${OBJS}
+libuinet.so: machine_includes uinet_api.symlist ${MHEADERS} ${MSRCS} ${HOST_OBJS} ${OBJS}
 ifeq (${HOST_OS},Darwin)
 	sed 's/.*/_&/' < uinet_api.symlist > uinet_api.symlist.darwin
 	${LD} -r -o $*.ro -exported_symbols_list uinet_api.symlist.darwin ${HOST_OBJS} ${OBJS}
@@ -333,7 +365,8 @@ else
 	objcopy --globalize-symbols=uinet_api.symlist $*.ro 
 endif
 	rm -f $@
-	ar -cqs $@ $*.ro ${HOST_OBJS}
+	${CC} -shared -Wl,-soname,libuinet.so -o libuinet.so ${HOST_OBJS} $*.ro
+	#ar -cqs $@ $*.ro ${HOST_OBJS}
 	rm -f $*.ro
 
 ${HOST_OBJS}: %.o: %.c
@@ -354,6 +387,7 @@ ${OBJS}: %.o: %.c ${IMACROS_FILE}
 .PHONY: clean
 clean:
 	rm -f libuinet.a
+	rm -f libuinet.so
 	rm -f ${MHEADERS} ${MSRCS} ${HOST_OBJS} ${OBJS} ${PROGRAM} ${IMACROS_FILE}
 	rm -rf ${MACHINE_INCLUDES_ROOT}
 
@@ -371,11 +405,12 @@ machine_includes:
 install:
 	${UINET_INSTALL_DIR} -d ${UINET_DESTDIR}/lib
 	${UINET_INSTALL_DIR} -d ${UINET_DESTDIR}/include/libuinet/
-	${UINET_INSTALL_LIB} libuinet.a ${UINET_DESTDIR}/lib
+	#${UINET_INSTALL_LIB} libuinet.a ${UINET_DESTDIR}/lib
+	${UINET_INSTALL_LIB} libuinet.so ${UINET_DESTDIR}/lib
 	${UINET_INSTALL_INC} api_include/uinet_api.h ${UINET_DESTDIR}/include/libuinet/
 	${UINET_INSTALL_INC} api_include/uinet_api_types.h ${UINET_DESTDIR}/include/libuinet/
 	${UINET_INSTALL_INC} api_include/uinet_api_errno.h ${UINET_DESTDIR}/include/libuinet/
-	${UINET_INSTALL_INC} api_include/uinet_config.h ${UINET_DESTDIR}/include/libuinet/
+	# ${UINET_INSTALL_INC} api_include/uinet_config.h ${UINET_DESTDIR}/include/libuinet/
 	${UINET_INSTALL_INC} api_include/uinet_host_sysctl_api.h ${UINET_DESTDIR}/include/libuinet/
 	${UINET_INSTALL_INC} api_include/uinet_host_sysctl_api_priv.h ${UINET_DESTDIR}/include/libuinet/
 	${UINET_INSTALL_INC} api_include/uinet_queue.h ${UINET_DESTDIR}/include/libuinet/

@@ -105,6 +105,7 @@ void _timeout_task_init(struct taskqueue *queue,
 #define	TIMEOUT_TASK_INIT(queue, timeout_task, priority, func, context) \
 	_timeout_task_init(queue, timeout_task, priority, func, context);
 
+#ifndef RIFT_UINET
 /*
  * Declare a reference to a taskqueue.
  */
@@ -159,12 +160,13 @@ struct __hack
 TASKQUEUE_FAST_DEFINE(name, taskqueue_thread_enqueue,			\
 	&taskqueue_##name, taskqueue_start_threads(&taskqueue_##name	\
 	1, PWAIT, "%s taskq", #name))
-
+#endif
 /*
  * These queues are serviced by software interrupt handlers.  To enqueue
  * a task, call taskqueue_enqueue(taskqueue_swi, &task) or
  * taskqueue_enqueue(taskqueue_swi_giant, &task).
  */
+#ifndef RIFT_UINET
 TASKQUEUE_DECLARE(swi_giant);
 TASKQUEUE_DECLARE(swi);
 
@@ -181,6 +183,7 @@ TASKQUEUE_DECLARE(thread);
  * from a fast interrupt handler context.
  */
 TASKQUEUE_DECLARE(fast);
+#endif
 int	taskqueue_enqueue_fast(struct taskqueue *queue, struct task *task);
 struct taskqueue *taskqueue_create_fast(const char *name, int mflags,
 				    taskqueue_enqueue_fn enqueue,

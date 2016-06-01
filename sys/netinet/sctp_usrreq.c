@@ -2152,8 +2152,10 @@ flags_out:
 			if (sctp_is_feature_on(inp, SCTP_PCB_FLAGS_DRYEVNT))
 				events->sctp_sender_dry_event = 1;
 
+#if 0
 			if (sctp_is_feature_on(inp, SCTP_PCB_FLAGS_STREAM_RESETEVNT))
 				events->sctp_stream_reset_event = 1;
+#endif
 			SCTP_INP_RUNLOCK(inp);
 			*optsize = sizeof(struct sctp_event_subscribe);
 			break;
@@ -2249,8 +2251,13 @@ flags_out:
 			SCTP_FIND_STCB(inp, stcb, saddr->sget_assoc_id);
 
 			if (stcb) {
+#ifdef RIFT_UINET
+				left = (*optsize) - sizeof(sctp_assoc_t);
+				*optsize = sizeof(sctp_assoc_t);
+#else
 				left = (*optsize) - sizeof(struct sctp_getaddresses);
 				*optsize = sizeof(struct sctp_getaddresses);
+#endif
 				sas = (struct sockaddr_storage *)&saddr->addr[0];
 
 				TAILQ_FOREACH(net, &stcb->asoc.nets, sctp_next) {
@@ -2320,7 +2327,12 @@ flags_out:
 			if (stcb) {
 				SCTP_TCB_UNLOCK(stcb);
 			}
-			*optsize = sizeof(struct sockaddr_storage) + actual;
+#ifdef RIFT_UINET
+      *optsize = sizeof(sctp_assoc_t) + actual;
+#else
+      *optsize = sizeof(struct sockaddr_storage) + actual;
+
+#endif
 			break;
 		}
 	case SCTP_PEER_ADDR_PARAMS:
@@ -4524,12 +4536,13 @@ sctp_setopt(struct socket *so, int optname, void *optval, size_t optsize,
 			} else {
 				sctp_feature_off(inp, SCTP_PCB_FLAGS_DRYEVNT);
 			}
-
+#if 0
 			if (events->sctp_stream_reset_event) {
 				sctp_feature_on(inp, SCTP_PCB_FLAGS_STREAM_RESETEVNT);
 			} else {
 				sctp_feature_off(inp, SCTP_PCB_FLAGS_STREAM_RESETEVNT);
 			}
+#endif
 			SCTP_INP_WUNLOCK(inp);
 
 			SCTP_INP_RLOCK(inp);
@@ -4580,11 +4593,13 @@ sctp_setopt(struct socket *so, int optname, void *optval, size_t optsize,
 				} else {
 					sctp_stcb_feature_off(inp, stcb, SCTP_PCB_FLAGS_DRYEVNT);
 				}
+#if 0
 				if (events->sctp_stream_reset_event) {
 					sctp_stcb_feature_on(inp, stcb, SCTP_PCB_FLAGS_STREAM_RESETEVNT);
 				} else {
 					sctp_stcb_feature_off(inp, stcb, SCTP_PCB_FLAGS_STREAM_RESETEVNT);
 				}
+#endif
 				SCTP_TCB_UNLOCK(stcb);
 			}
 			/*

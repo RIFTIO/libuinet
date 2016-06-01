@@ -3587,8 +3587,9 @@ igmp_init(void *unused __unused)
 	IGMP_LOCK_INIT();
 
 	m_raopt = igmp_ra_alloc();
-
+#ifndef RIFT_UINET
 	netisr_register(&igmp_nh);
+#endif
 }
 SYSINIT(igmp_init, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, igmp_init, NULL);
 

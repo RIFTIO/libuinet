@@ -267,8 +267,10 @@ intr_event_update(struct intr_event *ie)
 	 * If this event has an ithread, update it's priority and
 	 * name.
 	 */
+#ifndef RIFT_UINET
 	if (ie->ie_thread != NULL)
 		ithread_update(ie->ie_thread);
+#endif
 	CTR2(KTR_INTR, "%s: updated %s", __func__, ie->ie_fullname);
 }
 

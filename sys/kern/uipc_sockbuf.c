@@ -237,6 +237,39 @@ sowakeup(struct socket *so, struct sockbuf *sb)
  * socket (currently, it does nothing but enforce limits).  The space should
  * be released by calling sbrelease() when the socket is destroyed.
  */
+#ifdef RIFT_UINET
+int
+soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
+{
+  SOCKBUF_LOCK(&so->so_snd);
+  SOCKBUF_LOCK(&so->so_rcv);
+  //so->so_snd.sb_hiwat = (uint32_t)sndcc;
+  //so->so_rcv.sb_hiwat = (uint32_t)rcvcc;
+
+  if (sbreserve_locked(&so->so_snd, sndcc, so) == 0) {
+    goto bad;
+  }
+  if (sbreserve_locked(&so->so_rcv, rcvcc, so) == 0) {
+    goto bad2;
+  }
+  if (so->so_rcv.sb_lowat == 0)
+    so->so_rcv.sb_lowat = 1;
+  if (so->so_snd.sb_lowat == 0)
+    so->so_snd.sb_lowat = MCLBYTES;
+  if (so->so_snd.sb_lowat > (int)so->so_snd.sb_hiwat)
+    so->so_snd.sb_lowat = (int)so->so_snd.sb_hiwat;
+  SOCKBUF_UNLOCK(&so->so_rcv);
+  SOCKBUF_UNLOCK(&so->so_snd);
+  return (0);
+
+bad2:
+	sbrelease_locked(&so->so_snd, so);
+bad:
+  SOCKBUF_UNLOCK(&so->so_rcv);
+  SOCKBUF_UNLOCK(&so->so_snd);
+  return (ENOBUFS);
+}
+#else
 int
 soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
 {
@@ -264,6 +297,7 @@ bad:
 	SOCKBUF_UNLOCK(&so->so_snd);
 	return (ENOBUFS);
 }
+#endif
 
 static int
 sysctl_handle_sb_max(SYSCTL_HANDLER_ARGS)
@@ -285,6 +319,27 @@ sysctl_handle_sb_max(SYSCTL_HANDLER_ARGS)
  * Allot mbufs to a sockbuf.  Attempt to scale mbmax so that mbcnt doesn't
  * become limiting if buffering efficiency is near the normal case.
  */
+#ifdef RIFT_UINET
+int
+sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so)
+{
+	rlim_t sbsize_limit;
+
+  SOCKBUF_LOCK_ASSERT(sb);
+	if (cc > sb_max_adj)
+		return (0);
+  sbsize_limit = RLIM_INFINITY;
+
+	if (!chgsbsize(so->so_cred->cr_uidinfo, &sb->sb_hiwat, cc,
+	    sbsize_limit))
+		return (0);
+
+  sb->sb_mbmax = min(cc * sb_efficiency, sb_max);
+  if (sb->sb_lowat > sb->sb_hiwat)
+    sb->sb_lowat = sb->sb_hiwat;
+  return (1);
+}
+#else 
 int
 sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
     struct thread *td)
@@ -316,7 +371,20 @@ sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 		sb->sb_lowat = sb->sb_hiwat;
 	return (1);
 }
+#endif
 
+#ifdef RIFT_UINET
+int
+sbreserve(struct sockbuf *sb, u_long cc, struct socket *so)
+{
+	int error;
+
+	SOCKBUF_LOCK(sb);
+	error = sbreserve_locked(sb, cc, so);
+	SOCKBUF_UNLOCK(sb);
+	return (error);
+}
+#else 
 int
 sbreserve(struct sockbuf *sb, u_long cc, struct socket *so, 
     struct thread *td)
@@ -328,6 +396,7 @@ sbreserve(struct sockbuf *sb, u_long cc, struct socket *so,
 	SOCKBUF_UNLOCK(sb);
 	return (error);
 }
+#endif
 
 /*
  * Free mbufs held by a socket, and reserved mbuf space.

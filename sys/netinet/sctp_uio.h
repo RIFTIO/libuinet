@@ -71,7 +71,9 @@ struct sctp_event_subscribe {
 	uint8_t sctp_adaptation_layer_event;
 	uint8_t sctp_authentication_event;
 	uint8_t sctp_sender_dry_event;
+#ifndef RIFT_UINET
 	uint8_t sctp_stream_reset_event;
+#endif
 };
 
 /* ancillary data types */
@@ -232,6 +234,21 @@ struct sctp_snd_all_completes {
 	uint32_t sall_num_failed;
 };
 
+
+#ifdef RIFT_UINET
+enum sctp_sinfo_flags {
+	SCTP_UNORDERED = 1,  /* Send/receive message unordered. */
+	SCTP_ADDR_OVER = 2,  /* Override the primary destination. */
+	SCTP_ABORT=4,        /* Send an ABORT message to the peer. */
+	SCTP_SACK_IMMEDIATELY = 8,      /* SACK should be sent without delay */
+	SCTP_EOF=MSG_FIN,    /* Initiate graceful shutdown process. */
+};
+#define SCTP_NOTIFICATION     0x0010	/* next message is a notification */
+#define SCTP_COMPLETE         0x0020	/* next message is complete */
+#define SCTP_SENDALL          0x1000	/* Send this on all associations */
+#define SCTP_EOR              0x2000	/* end of message signal */
+#else
+
 /* Flags that go into the sinfo->sinfo_flags field */
 #define SCTP_NOTIFICATION     0x0010	/* next message is a notification */
 #define SCTP_COMPLETE         0x0020	/* next message is complete */
@@ -242,6 +259,7 @@ struct sctp_snd_all_completes {
 #define SCTP_SENDALL          0x1000	/* Send this on all associations */
 #define SCTP_EOR              0x2000	/* end of message signal */
 #define SCTP_SACK_IMMEDIATELY 0x4000	/* Set I-Bit */
+#endif
 
 #define INVALID_SINFO_FLAG(x) (((x) & 0xfffffff0 \
                                     & ~(SCTP_EOF | SCTP_ABORT | SCTP_UNORDERED |\
@@ -298,12 +316,23 @@ struct sctp_assoc_change {
 	uint8_t sac_info[];
 };
 
+#ifdef RIFT_UINET
+/* Copied from /usr/include/netinet/sctp.h */
+enum sctp_sac_state {
+	SCTP_COMM_UP,
+	SCTP_COMM_LOST,
+	SCTP_RESTART,
+	SCTP_SHUTDOWN_COMP,
+	SCTP_CANT_STR_ASSOC,
+};
+#else
 /* sac_state values */
 #define SCTP_COMM_UP            0x0001
 #define SCTP_COMM_LOST          0x0002
 #define SCTP_RESTART            0x0003
 #define SCTP_SHUTDOWN_COMP      0x0004
 #define SCTP_CANT_STR_ASSOC     0x0005
+#endif
 
 /* sac_info values */
 #define SCTP_ASSOC_SUPPORTS_PR        0x01
@@ -327,17 +356,39 @@ struct sctp_paddr_change {
 };
 
 /* paddr state values */
+#ifdef RIFT_UINET
+/* copied from /usr/include/netinet/sctp.h */
+enum sctp_spc_state {
+	SCTP_ADDR_AVAILABLE,
+	SCTP_ADDR_UNREACHABLE,
+	SCTP_ADDR_REMOVED,
+	SCTP_ADDR_ADDED,
+	SCTP_ADDR_MADE_PRIM,
+	SCTP_ADDR_CONFIRMED,
+};
+#else 
 #define SCTP_ADDR_AVAILABLE	0x0001
 #define SCTP_ADDR_UNREACHABLE	0x0002
 #define SCTP_ADDR_REMOVED	0x0003
 #define SCTP_ADDR_ADDED		0x0004
 #define SCTP_ADDR_MADE_PRIM	0x0005
 #define SCTP_ADDR_CONFIRMED	0x0006
+#endif
 
+#ifdef RIFT_UINET
+enum sctp_spinfo_state {
+	SCTP_INACTIVE,
+	SCTP_PF,
+	SCTP_ACTIVE,
+	SCTP_UNCONFIRMED,
+	SCTP_UNKNOWN = 0xffff
+};
+#else
 #define SCTP_ACTIVE		0x0001	/* SCTP_ADDR_REACHABLE */
 #define SCTP_INACTIVE		0x0002	/* neither SCTP_ADDR_REACHABLE nor
 					 * SCTP_ADDR_UNCONFIRMED */
 #define SCTP_UNCONFIRMED	0x0200	/* SCTP_ADDR_UNCONFIRMED */
+#endif
 
 /* remote error events */
 struct sctp_remote_error {
@@ -529,6 +580,42 @@ union sctp_notification {
 	struct sctp_stream_change_event sn_strchange_event;
 };
 
+#if RIFT_UINET
+/* Copied from /usr/include/netinet/sctp.h */
+enum sctp_sn_type {
+	SCTP_SN_TYPE_BASE     = (1<<15),
+	SCTP_ASSOC_CHANGE,
+#define SCTP_ASSOC_CHANGE SCTP_ASSOC_CHANGE
+	SCTP_PEER_ADDR_CHANGE,
+#define SCTP_PEER_ADDR_CHANGE SCTP_PEER_ADDR_CHANGE
+	SCTP_SEND_FAILED,
+#define SCTP_SEND_FAILED SCTP_SEND_FAILED
+	SCTP_REMOTE_ERROR,
+#define SCTP_REMOTE_ERROR SCTP_REMOTE_ERROR
+	SCTP_SHUTDOWN_EVENT,
+#define SCTP_SHUTDOWN_EVENT SCTP_SHUTDOWN_EVENT
+	SCTP_PARTIAL_DELIVERY_EVENT,
+#define SCTP_PARTIAL_DELIVERY_EVENT SCTP_PARTIAL_DELIVERY_EVENT
+	SCTP_ADAPTATION_INDICATION,
+#define SCTP_ADAPTATION_INDICATION SCTP_ADAPTATION_INDICATION
+#define SCTP_ADAPTION_INDICATION   SCTP_ADAPTATION_INDICATION         
+	SCTP_AUTHENTICATION_INDICATION,
+#define SCTP_AUTHENTICATION_INDICATION SCTP_AUTHENTICATION_INDICATION
+#define SCTP_AUTHENTICATION_EVENT SCTP_AUTHENTICATION_INDICATION
+	SCTP_SENDER_DRY_EVENT,
+#define SCTP_SENDER_DRY_EVENT SCTP_SENDER_DRY_EVENT
+  SCTP_STREAM_RESET_EVENT,
+#define SCTP_STREAM_RESET_EVENT     SCTP_STREAM_RESET_EVENT
+  SCTP_NOTIFICATIONS_STOPPED_EVENT,
+#define SCTP_NOTIFICATIONS_STOPPED_EVENT        SCTP_NOTIFICATIONS_STOPPED_EVENT	/* we don't send this */
+  SCTP_ASSOC_RESET_EVENT,
+#define SCTP_ASSOC_RESET_EVENT                  SCTP_ASSOC_RESET_EVENT
+  SCTP_STREAM_CHANGE_EVENT,
+#define SCTP_STREAM_CHANGE_EVENT                SCTP_STREAM_CHANGE_EVENT
+  SCTP_SEND_FAILED_EVENT,
+#define SCTP_SEND_FAILED_EVENT                SCTP_SEND_FAILED_EVENT
+};
+#else
 /* notification types */
 #define SCTP_ASSOC_CHANGE                       0x0001
 #define SCTP_PEER_ADDR_CHANGE                   0x0002
@@ -546,6 +633,7 @@ union sctp_notification {
 #define SCTP_ASSOC_RESET_EVENT                  0x000c
 #define SCTP_STREAM_CHANGE_EVENT                0x000d
 #define SCTP_SEND_FAILED_EVENT                  0x000e
+#endif
 /*
  * socket option structs
  */

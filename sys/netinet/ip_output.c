@@ -94,6 +94,7 @@ __FBSDID("$FreeBSD: release/9.1.0/sys/netinet/ip_output.c 238713 2012-07-23 09:1
 #ifdef MAC
 #include <security/mac/mac_framework.h>
 #endif /* MAC */
+#include <net/if_var.h>
 
 VNET_DEFINE(u_short, ip_id);
 
@@ -109,6 +110,9 @@ static void	ip_mloopback
 
 extern int in_mcast_loop;
 extern	struct protosw inetsw[];
+
+extern int
+uinet_packet_transmit_handler(struct ifnet *ifp,struct mbuf *m);
 
 /*
  * IP output.  The packet in mbuf chain m contains a skeletal IP
@@ -148,7 +152,7 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 	int ispromisc = 0;
 #endif
 	M_ASSERTPKTHDR(m);
-
+	
 	if (inp != NULL) {
 		INP_LOCK_ASSERT(inp);
 		M_SETFIB(m, inp->inp_inc.inc_fibnum);
@@ -157,6 +161,57 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 			m->m_flags |= M_FLOWID;
 		}
 	}
+
+#ifdef RIFT_UINET
+  //  HACK: Send packet out directly bypassing IP stack here. For raw socket we will do send and for RW this will need to invoke IPFP tx fn.
+  {  
+    struct ip *ip;
+    int error;
+    ip = mtod(m, struct ip *);
+
+    if ((flags & (IP_FORWARDING|IP_RAWOUTPUT)) == 0) {
+      ip->ip_v = IPVERSION;
+      ip->ip_hl = hlen >> 2;
+      ip->ip_id = ip_newid();
+    }
+
+		ip->ip_len = htons(ip->ip_len);
+		ip->ip_off = htons(ip->ip_off);
+
+    m->m_pkthdr.csum_flags |= CSUM_IP;
+    //sw_csum = m->m_pkthdr.csum_flags & ~ifp->if_hwassist;
+    sw_csum = m->m_pkthdr.csum_flags;
+    if (sw_csum & CSUM_DELAY_DATA) {
+      in_delayed_cksum(m);
+      sw_csum &= ~CSUM_DELAY_DATA;
+    }
+#ifdef SCTP
+	if (sw_csum & CSUM_SCTP) {
+		sctp_delayed_cksum(m, (uint32_t)(ip->ip_hl << 2));
+		sw_csum &= ~CSUM_SCTP;
+	}
+#endif
+
+		ip->ip_sum = 0;
+		if (sw_csum & CSUM_DELAY_IP)
+			ip->ip_sum = in_cksum(m, hlen);
+
+    error = uinet_packet_transmit_handler(NULL,m);
+    return 0;
+
+#if 0
+    uint32_t addr = ntohl(ip->ip_src.s_addr);
+    TAILQ_FOREACH(ia, &V_in_ifaddrhead, ia_link) {
+      if((addr & ia->ia_subnetmask) == ia->ia_subnet) {
+        ifp = ia->ia_ifp;
+        error = (*ifp->if_transmit)(ifp, m);
+        return 0;
+      }
+    }
+#endif
+  }
+#endif
+
 
 #ifdef PROMISCUOUS_INET
 	l2i_tag = (struct ifl2info *)m_tag_locate(m,
@@ -230,6 +285,9 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 			hlen = len; /* ip->ip_hl is updated above */
 	}
 	ip = mtod(m, struct ip *);
+
+
+        
 
 	/*
 	 * Fill in IP header.  If we are not allowing fragmentation,

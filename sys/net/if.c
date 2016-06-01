@@ -904,7 +904,9 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 	/*
 	 * Remove/wait for pending events.
 	 */
+#ifndef RIFT_UINET
 	taskqueue_drain(taskqueue_swi, &ifp->if_linktask);
+#endif
 
 	/*
 	 * Remove routes and flush queues.
@@ -1952,7 +1954,9 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 
 	ifp->if_link_state = link_state;
 
+#ifndef RIFT_UINET
 	taskqueue_enqueue(taskqueue_swi, &ifp->if_linktask);
+#endif
 }
 
 static void

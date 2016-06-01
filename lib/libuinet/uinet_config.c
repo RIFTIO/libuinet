@@ -30,11 +30,15 @@
 #include <sys/malloc.h>
 #include <sys/systm.h>
 
+//#include "uinet_config.h"
+//#include "uinet_config_internal.h"
 #include "uinet_internal.h"
-#include "uinet_if_netmap.h"
+//#include "uinet_if_netmap.h"
 #include "uinet_if_pcap.h"
 #include "uinet_if_bridge.h"
 #include "uinet_if_span.h"
+#include "uinet_if_raw.h"
+#include "uinet_if_fpath.h"
 
 static VNET_DEFINE(TAILQ_HEAD(config_head, uinet_if), uinet_if_list);
 #define V_uinet_if_list VNET(uinet_if_list)
@@ -85,7 +89,7 @@ int
 uinet_ifcreate(uinet_instance_t uinst, uinet_iftype_t type, const char *configstr,
 	       const char *alias, unsigned int cdom, int cpu, uinet_if_t *uif)
 {
-	struct uinet_if *new_uif;
+	struct uinet_if *new_uif = NULL;
 	int alias_len;
 	int error = 0;
 
@@ -141,9 +145,11 @@ uinet_ifcreate(uinet_instance_t uinst, uinet_iftype_t type, const char *configst
 	new_uif->ifdata = NULL;
 
 	switch (new_uif->type) {
+#if 0
 	case UINET_IFTYPE_NETMAP:
 		error = if_netmap_attach(new_uif);
 		break;
+#endif
 	case UINET_IFTYPE_PCAP:
 		error = if_pcap_attach(new_uif);
 		break;
@@ -152,6 +158,12 @@ uinet_ifcreate(uinet_instance_t uinst, uinet_iftype_t type, const char *configst
 		break;
 	case UINET_IFTYPE_SPAN:
 		error = if_span_attach(new_uif);
+		break;
+	case UINET_IFTYPE_RAW:
+		error = if_raw_attach(new_uif);
+		break;
+	case UINET_IFTYPE_FPATH:
+		error = if_fpath_attach(new_uif);
 		break;
 	default:
 		printf("Error attaching interface with config %s: unknown interface type %d\n", new_uif->configstr, new_uif->type);
@@ -189,11 +201,19 @@ uinet_ifdestroy_internal(struct uinet_if *uif)
 	int error;
 
 	switch (uif->type) {
+#if 0
 	case UINET_IFTYPE_NETMAP:
 		error = if_netmap_detach(uif);
 		break;
+#endif
 	case UINET_IFTYPE_PCAP:
 		error = if_pcap_detach(uif);
+		break;
+	case UINET_IFTYPE_RAW:
+		error = if_raw_detach(uif);
+		break;
+	case UINET_IFTYPE_FPATH:
+		error = if_fpath_detach(uif);
 		break;
 	default:
 		printf("Error detaching interface %s: unknown interface type %d\n", uif->name, uif->type);

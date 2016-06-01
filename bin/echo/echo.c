@@ -165,7 +165,6 @@ err:
 	uinet_soclose(w->so);
 }
 
-
 static void
 accept_cb(struct ev_loop *loop, ev_uinet *w, int revents)
 {
@@ -351,7 +350,6 @@ int main (int argc, char **argv)
 	unsigned int i;
 	int error;
 	struct uinet_in_addr tmpinaddr;
-	int ifnetmap_count = 0;
 	int ifpcap_count = 0;
 	int current_uinst_index = 0;
 	int current_uinst_num_interfaces = 0;
@@ -359,10 +357,6 @@ int main (int argc, char **argv)
 
 	memset(interfaces, 0, sizeof(interfaces));
 	memset(servers, 0, sizeof(servers));
-
-	for (i = 0; i < MAX_INTERFACES; i++) {
-		interfaces[i].type = UINET_IFTYPE_NETMAP;
-	}
 
 	for (i = 0; i < MAX_SERVERS; i++) {
 		servers[i].listen_port = -1;
@@ -429,11 +423,12 @@ int main (int argc, char **argv)
 			if (0 == num_interfaces) {
 				printf("No interface specified\n");
 				return (1);
-			} else if (0 == strcmp(optarg, "netmap")) {
-				interfaces[num_interfaces - 1].type = UINET_IFTYPE_NETMAP;
 			} else if (0 == strcmp(optarg, "pcap")) {
 				interfaces[num_interfaces - 1].type = UINET_IFTYPE_PCAP;
-			} else {
+			} else if(0 == strcmp(optarg, "raw")) { 
+				interfaces[num_interfaces - 1].type = UINET_IFTYPE_RAW;
+			}
+			else {
 				printf("Unknown interface type %s\n", optarg);
 				return (1);
 			}
@@ -494,8 +489,8 @@ int main (int argc, char **argv)
 	}
 	
 	
-	uinet_init(1, 128*1024, NULL);
-	uinet_install_sighandlers();
+	uinet_init(1, 128*1024, 0);
+	//uinet_install_sighandlers();
 
 	current_uinst = uinet_instance_default();
 	current_uinst_index = 0;
@@ -511,13 +506,13 @@ int main (int argc, char **argv)
 		interfaces[i].uinst = current_uinst;
 
 		switch (interfaces[i].type) {
-		case UINET_IFTYPE_NETMAP:
-			interfaces[i].alias_prefix = "netmap";
-			interfaces[i].instance = ifnetmap_count;
-			ifnetmap_count++;
-			break;
 		case UINET_IFTYPE_PCAP:
 			interfaces[i].alias_prefix = "pcap";
+			interfaces[i].instance = ifpcap_count;
+			ifpcap_count++;
+			break;
+		case UINET_IFTYPE_RAW:
+			interfaces[i].alias_prefix = "raw";
 			interfaces[i].instance = ifpcap_count;
 			ifpcap_count++;
 			break;
@@ -532,7 +527,7 @@ int main (int argc, char **argv)
 		if (verbose) {
 			printf("Creating interface %s, Promiscuous INET %s, cdom=%u\n",
 			       interfaces[i].alias, interfaces[i].promisc ? "enabled" : "disabled",
-			       interfaces[i].promisc ? interfaces[i].cdom : 0);
+    			        interfaces[i].promisc ? interfaces[i].cdom : 0);
 		}
 
 		error = uinet_ifcreate(interfaces[i].uinst, interfaces[i].type, interfaces[i].ifname, interfaces[i].alias,

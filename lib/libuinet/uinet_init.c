@@ -58,18 +58,20 @@ extern void mi_startup(void);
 extern void uinet_init_thread0(void);
 extern void mutex_init(void);
 
+#ifndef RIFT_UINET
 static void shutdown_helper(void *arg);
 static void one_sighandling_thread(void *arg);
 
-
-#if 0
 pthread_mutex_t init_lock;
 pthread_cond_t init_cond;
-#endif
 
 static struct thread *shutdown_helper_thread;
 static struct thread *at_least_one_sighandling_thread;
 static struct uhi_msg shutdown_helper_msg;
+#endif
+char uinet_intialised = FALSE;
+char uinet_init_completed = FALSE;
+
 struct uinet_instance uinst0;
 
 int
@@ -79,7 +81,15 @@ uinet_init(unsigned int ncpus, unsigned int nmbclusters, struct uinet_instance_c
 	char tmpbuf[32];
 	int boot_pages;
 	int num_hash_buckets;
+//#ifndef RIFT_TIMER
+#if 1
 	caddr_t v;
+#endif
+
+  if(uinet_intialised == TRUE) {
+    return (0);
+  }
+  uinet_intialised = TRUE;
 
 	if (ncpus > MAXCPU) {
 		printf("Limiting number of CPUs to %u\n", MAXCPU);
@@ -126,14 +136,22 @@ uinet_init(unsigned int ncpus, unsigned int nmbclusters, struct uinet_instance_c
         /* vm_init bits */
 	
 	/* first get size required, then alloc memory, then give that memory to the second call */
-	v = 0;
-        v = kern_timeout_callwheel_alloc(v);
-	kern_timeout_callwheel_alloc(malloc(round_page((vm_offset_t)v), M_DEVBUF, M_ZERO));
-        kern_timeout_callwheel_init();
+//#ifndef RIFT_TIMER
+#if 1
+  v = 0;
+  v = kern_timeout_callwheel_alloc(v,NULL);
+  kern_timeout_callwheel_alloc(malloc(round_page((vm_offset_t)v), M_DEVBUF, M_ZERO),NULL);
+  kern_timeout_callwheel_init(NULL);
+#endif
 
 	uinet_init_thread0();
 
-        uma_startup(malloc(boot_pages*PAGE_SIZE, M_DEVBUF, M_ZERO), boot_pages);
+#ifdef RIFT_UINET
+  void *mem = uhi_mmap(NULL, boot_pages*PAGE_SIZE, UHI_PROT_READ|UHI_PROT_WRITE, UHI_MAP_ANON|UHI_MAP_PRIVATE, -1, 0);
+  uma_startup(mem,boot_pages);
+#else
+  uma_startup(malloc(boot_pages*PAGE_SIZE, M_DEVBUF, M_ZERO), boot_pages);
+#endif
 	uma_startup2();
 
 	/* XXX any need to tune this? */
@@ -141,13 +159,14 @@ uinet_init(unsigned int ncpus, unsigned int nmbclusters, struct uinet_instance_c
 	uma_page_slab_hash = malloc(sizeof(struct uma_page)*num_hash_buckets, M_DEVBUF, M_ZERO);
 	uma_page_mask = num_hash_buckets - 1;
 
-#if 0
+#ifndef RIFT_UINET
 	pthread_mutex_init(&init_lock, NULL);
 	pthread_cond_init(&init_cond, NULL);
 #endif
 	mutex_init();
         mi_startup();
 	sx_init(&proctree_lock, "proctree");
+ 
 	td = curthread;
 
 	/* XXX - would very much like to do better than this */
@@ -158,6 +177,7 @@ uinet_init(unsigned int ncpus, unsigned int nmbclusters, struct uinet_instance_c
 
 	uinet_instance_init(&uinst0, vnet0, inst_cfg);
 
+#ifndef RIFT_UINET
 	if (uhi_msg_init(&shutdown_helper_msg, 1, 0) != 0)
 		printf("Failed to init shutdown helper message - there will be no shutdown helper thread\n");
 	else if (kthread_add(shutdown_helper, &shutdown_helper_msg, NULL, &shutdown_helper_thread, 0, 0, "shutdown_helper"))
@@ -171,17 +191,18 @@ uinet_init(unsigned int ncpus, unsigned int nmbclusters, struct uinet_instance_c
 		printf("Failed to create at least one signal handling thread\n");
 	uhi_mask_all_signals();
 
-#if 0
 	printf("maxusers=%d\n", maxusers);
 	printf("maxfiles=%d\n", maxfiles);
 	printf("maxsockets=%d\n", maxsockets);
 	printf("nmbclusters=%d\n", nmbclusters);
 #endif
 
+  uinet_init_completed = TRUE;
 	return (0);
 }
 
 
+#ifndef RIFT_UINET
 static void
 one_sighandling_thread(void *arg)
 {
@@ -191,7 +212,6 @@ one_sighandling_thread(void *arg)
 		uhi_nanosleep(60 * UHI_NSEC_PER_SEC);
 	}
 }
-
 
 static void
 shutdown_helper(void *arg)
@@ -271,8 +291,7 @@ shutdown_helper(void *arg)
 	printf("Shutdown helper thread exiting\n");
 }
 
-
-void
+void __attribute__((weak))
 uinet_shutdown(unsigned int signo)
 {
 	uint8_t signo_msg = signo;
@@ -292,7 +311,9 @@ uinet_shutdown(unsigned int signo)
 	 * shutdown_helper_msg, so for now we leak whatever small bit of
 	 * context might be associated with the message.
 	 */
-	/* uhi_msg_destroy(&shutdown_helper_msg); */
+#ifndef RIFT_UINET
+	 uhi_msg_destroy(&shutdown_helper_msg); 
+#endif
 }
 
 
@@ -301,3 +322,4 @@ uinet_install_sighandlers(void)
 {
 	uhi_install_sighandlers();
 }
+#endif

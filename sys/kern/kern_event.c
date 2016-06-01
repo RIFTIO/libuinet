@@ -86,7 +86,9 @@ MTX_SYSINIT(kq_global, &kq_global, "kqueue order", MTX_DEF);
 	haslck = 0;				\
 } while (0)
 
+#ifndef RIFT_UINET
 TASKQUEUE_DEFINE_THREAD(kqueue);
+#endif
 
 static int	kevent_copyout(void *arg, struct kevent *kevp, int count);
 static int	kevent_copyin(void *arg, struct kevent *kevp, int count);
@@ -1203,7 +1205,9 @@ kqueue_schedtask(struct kqueue *kq)
 	    ("scheduling kqueue task while draining"));
 
 	if ((kq->kq_state & KQ_TASKSCHED) != KQ_TASKSCHED) {
+#ifndef RIFT_UINET
 		taskqueue_enqueue(taskqueue_kqueue, &kq->kq_task);
+#endif
 		kq->kq_state |= KQ_TASKSCHED;
 	}
 }

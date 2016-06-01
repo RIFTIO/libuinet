@@ -231,7 +231,7 @@ static void inline 	tcp_fields_to_net(struct tcphdr *);
 static int inline	tcp_signature_verify_input(struct mbuf *, int, int,
 			    int, struct tcpopt *, struct tcphdr *, u_int);
 #endif
-static void inline	cc_ack_received(struct tcpcb *tp, struct tcphdr *th,
+static void cc_ack_received(struct tcpcb *tp, struct tcphdr *th,
 			    uint16_t type);
 static void inline	cc_conn_init(struct tcpcb *tp);
 static void inline	cc_post_recovery(struct tcpcb *tp, struct tcphdr *th);
@@ -273,7 +273,7 @@ hhook_run_tcp_est_in(struct tcpcb *tp, struct tcphdr *th, struct tcpopt *to)
 /*
  * CC wrapper hook functions
  */
-static void inline
+static void 
 cc_ack_received(struct tcpcb *tp, struct tcphdr *th, uint16_t type)
 {
 	INP_WLOCK_ASSERT(tp->t_inpcb);
@@ -395,7 +395,7 @@ cc_conn_init(struct tcpcb *tp)
 		CC_ALGO(tp)->conn_init(tp->ccv);
 }
 
-void inline
+void 
 cc_cong_signal(struct tcpcb *tp, struct tcphdr *th, uint32_t type)
 {
 	INP_WLOCK_ASSERT(tp->t_inpcb);
@@ -716,6 +716,7 @@ tcp_input(struct mbuf *m, int off0)
 		}
 		/* Re-initialization for later version check */
 		ip->ip_v = IPVERSION;
+		ip->ip_hl = sizeof(*ip) >> 2; 
 	}
 #endif /* INET */
 
@@ -1910,8 +1911,13 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				 * Give up when limit is reached.
 				 */
 				if (newsize)
+#ifdef RIFT_UINET
+					if (!sbreserve_locked(&so->so_rcv,
+					    newsize, so))
+#else 
 					if (!sbreserve_locked(&so->so_rcv,
 					    newsize, so, NULL))
+#endif
 						so->so_rcv.sb_flags &= ~SB_AUTOSIZE;
 				m_adj(m, drop_hdrlen);	/* delayed header drop */
 				sbappendstream_locked(&so->so_rcv, m);
@@ -3693,7 +3699,11 @@ tcp_mss(struct tcpcb *tp, int offer)
 		if (bufsize > sb_max)
 			bufsize = sb_max;
 		if (bufsize > so->so_snd.sb_hiwat)
+#ifdef RIFT_UINET
+			(void)sbreserve_locked(&so->so_snd, bufsize, so);
+#else 
 			(void)sbreserve_locked(&so->so_snd, bufsize, so, NULL);
+#endif
 	}
 	SOCKBUF_UNLOCK(&so->so_snd);
 	tp->t_maxseg = mss;
@@ -3708,7 +3718,11 @@ tcp_mss(struct tcpcb *tp, int offer)
 		if (bufsize > sb_max)
 			bufsize = sb_max;
 		if (bufsize > so->so_rcv.sb_hiwat)
+#ifdef RIFT_UINET
+			(void)sbreserve_locked(&so->so_rcv, bufsize, so);
+#else 
 			(void)sbreserve_locked(&so->so_rcv, bufsize, so, NULL);
+#endif
 	}
 	SOCKBUF_UNLOCK(&so->so_rcv);
 

@@ -251,7 +251,11 @@ MALLOC_DECLARE(SCTP_M_MCORE);
 
 #define SCTP_FREE_SONAME(var)	free(var, M_SONAME)
 
+#ifdef RIFT_UINET
+#define SCTP_PROCESS_STRUCT struct thread *
+#else
 #define SCTP_PROCESS_STRUCT struct proc *
+#endif
 
 /*
  * zone allocation functions

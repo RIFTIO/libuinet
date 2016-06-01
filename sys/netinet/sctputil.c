@@ -331,7 +331,9 @@ sctp_log_lock(struct sctp_inpcb *inp, struct sctp_tcb *stcb, uint8_t from)
 		sctp_clog.x.lock.inp_lock = SCTP_LOCK_UNKNOWN;
 		sctp_clog.x.lock.create_lock = SCTP_LOCK_UNKNOWN;
 	}
+#ifndef RIFT_UINET
 	sctp_clog.x.lock.info_lock = rw_wowned(&SCTP_BASE_INFO(ipi_ep_mtx));
+#endif
 	if (inp && (inp->sctp_socket)) {
 		sctp_clog.x.lock.sock_lock = mtx_owned(&(inp->sctp_socket->so_rcv.sb_mtx));
 		sctp_clog.x.lock.sockrcvbuf_lock = mtx_owned(&(inp->sctp_socket->so_rcv.sb_mtx));
@@ -6944,7 +6946,7 @@ sctp_over_udp_start(void)
 	th = curthread;
 	cred = th->td_ucred;
 	if ((ret = socreate(PF_INET, &sop,
-	    SOCK_DGRAM, IPPROTO_UDP, cred, th))) {
+	    SOCK_DGRAM, IPPROTO_UDP, cred, th,vnet0))) {
 		return (ret);
 	}
 	SCTP_BASE_INFO(udp_tun_socket) = sop;

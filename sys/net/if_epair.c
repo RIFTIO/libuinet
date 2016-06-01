@@ -955,7 +955,9 @@ epair_modevent(module_t mod, int type, void *data)
 		epair_nh.nh_qlimit = 42 * ifqmaxlen; /* 42 shall be the number. */
 		if (TUNABLE_INT_FETCH("net.link.epair.netisr_maxqlen", &qlimit))
 		    epair_nh.nh_qlimit = qlimit;
+#ifndef RIFT_UINET
 		netisr_register(&epair_nh);
+#endif
 		if_clone_attach(&epair_cloner);
 		if (bootverbose)
 			printf("%s initialized.\n", EPAIRNAME);

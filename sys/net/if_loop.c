@@ -186,6 +186,7 @@ VNET_SYSUNINIT(vnet_loif_uninit, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY,
     vnet_loif_uninit, NULL);
 #endif
 
+#ifndef RIFT_UINET
 static int
 loop_modevent(module_t mod, int type, void *data)
 {
@@ -211,6 +212,7 @@ static moduledata_t loop_mod = {
 };
 
 DECLARE_MODULE(if_lo, loop_mod, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY);
+#endif
 
 int
 looutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,

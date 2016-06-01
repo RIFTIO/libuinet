@@ -317,8 +317,8 @@ typedef void timeout_t(void *);	/* timeout function type */
 void	callout_handle_init(struct callout_handle *);
 struct	callout_handle timeout(timeout_t *, void *, int);
 void	untimeout(timeout_t *, void *, struct callout_handle);
-caddr_t	kern_timeout_callwheel_alloc(caddr_t v);
-void	kern_timeout_callwheel_init(void);
+caddr_t	kern_timeout_callwheel_alloc(caddr_t v,void *);
+void	kern_timeout_callwheel_init(void *);
 
 /* Stubs for obsolete functions that used to be for interrupt management */
 static __inline void		spl0(void)		{ return; }

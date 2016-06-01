@@ -228,8 +228,9 @@ ip6_init(void)
 			if (pr->pr_protocol < IPPROTO_MAX)
 				ip6_protox[pr->pr_protocol] = pr - inet6sw;
 		}
-
+#ifndef RIFT_UINET
 	netisr_register(&ip6_nh);
+#endif
 }
 
 /*

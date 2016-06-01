@@ -38,6 +38,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/errno.h>
+#if 0
+#include <endian.h>
+#endif
 #include <sys/types.h>
 #include <sys/mman.h>
 
@@ -298,6 +301,8 @@ passive_sysctl_handle_resp(struct u_sysctl_state_t *us)
  * Returns 1 if the connection should stay open; 0 if
  * not.
  */
+#pragma GCC diagnostic push  // require GCC 4.6
+#pragma GCC diagnostic ignored "-Wcast-qual"
 static int
 passive_sysctl_reqtype_str(int ns, nvlist_t *nvl, struct u_sysctl_state_t *us)
 {
@@ -454,7 +459,7 @@ finish:
 	passive_sysctl_state_clean(us);
 	return (us->retval);
 }
-
+#pragma GCC diagnostic pop   // require GCC 4.6
 void *
 uinet_host_sysctl_listener_thread(void *arg)
 {
@@ -473,6 +478,9 @@ uinet_host_sysctl_listener_thread(void *arg)
 
 	bzero(&sun, sizeof(sun));
 	strcpy(sun.sun_path, path);
+#if 0
+	sun.sun_len = 0;
+#endif
 	sun.sun_family = AF_UNIX;
 
 	printf("sysctl_listener: starting listener on %s\n", sun.sun_path);
